@@ -630,7 +630,7 @@ function profCharts(t,e){
   return `<div class="chart" style="margin:12px 0;justify-content:space-around"><div>${donut([{v:t.p,c:COL.P},{v:t.a,c:COL.A},{v:t.e,c:COL.E}],t.pct==null?'—':t.pct+'%','حضور '+t.p+' من '+t.tot,135)}</div><div style="flex:1;min-width:210px">${EVC.map(([k,l,c])=>hbar(l,e[k]||0,5,c,f1(e[k])+'/5')).join('')}</div></div>`;
 }
 
-function vStudents(){
+function vStudents0(){
   const q=state.q.trim(),dg=dupGroups();
   const list=fsorted().filter(s=>!q||(s.name+' '+(can('contact')?s.phone+' '+s.address:'')).includes(q));
   return (dg.length?`<div class="card noprint" style="background:var(--wab);border-color:var(--wa)"><div class="row sp"><span>⚠ يوجد <b>${dg.length}</b> مجموعة أسماء مكررة محتملة</span><button class="btn sm pri" data-act="dupRev">مراجعة ودمج</button></div></div>`:'')+`<div class="card"><div class="row sp"><input id="q" placeholder="🔍 بحث بالاسم أو الرقم أو العنوان" value="${esc(state.q)}" style="flex:1;min-width:200px"><button class="btn pri" data-act="addStudent">+ إضافة شاب</button>${can('rep')?'<button class="btn" data-act="cardsAll">🪪 طباعة البطاقات</button>':''}</div>${grChips()}</div>
@@ -639,6 +639,32 @@ function vStudents(){
   ${list.length?'':'<div class="empty">لا توجد نتائج</div>'}</div>`;
 }
 
+const VCF_PFX='شباب';
+const vEsc=s=>String(s==null?'':s).replace(/\\/g,'\\\\').replace(/\r?\n/g,'\\n').replace(/([,;])/g,'\\$1');
+const vPh=p=>String(p||'').replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[^\d+]/g,'');
+function vcfBuild(list){
+  let n=0,skip=0;const out=[];
+  list.forEach(s=>{
+    const p=vPh(s.phone),pp=vPh(s.parentPhone);if(p.length<7&&pp.length<7){skip++;return}
+    const nm=VCF_PFX+' '+s.name,L=['BEGIN:VCARD','VERSION:3.0','FN:'+vEsc(nm),'N:'+vEsc(nm)+';;;;','ORG:'+vEsc(db.settings.cls)];
+    if(p.length>=7)L.push('TEL;TYPE=CELL:'+p);
+    if(pp.length>=7)L.push('item1.TEL:'+pp,'item1.X-ABLabel:'+vEsc('ولي أمر '+s.name));
+    if(/^\d{4}-\d{2}-\d{2}$/.test(s.birth||''))L.push('BDAY:'+s.birth);
+    if(s.address)L.push('ADR;TYPE=HOME:;;'+vEsc(s.address)+';;;;');
+    if(s.grade)L.push('NOTE:'+vEsc(s.grade));
+    L.push('END:VCARD');out.push(L.join('\r\n'));n++});
+  return {text:out.join('\r\n')+'\r\n',n,skip};
+}
+async function vcfExport(){
+  const r=vcfBuild(fsorted());if(!r.n){toast('لا يوجد شباب لديهم أرقام تليفون');return}
+  const name='جهات_'+db.settings.cls.replace(/\s+/g,'_')+'.vcf';
+  try{const f=new File([r.text],name,{type:'text/vcard'});if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f],title:'جهات الاتصال'});toast('تم — '+r.n+' جهة'+(r.skip?' (تخطّي '+r.skip+' بدون رقم)':''));return}}catch(e){if(e&&e.name==='AbortError')return}
+  dl(name,r.text,'text/vcard;charset=utf-8');
+  toast('تم تنزيل '+r.n+' جهة'+(r.skip?' (تخطّي '+r.skip+' بدون رقم)':'')+' — افتح الملف من الموبايل واختر حفظ');
+}
+function vStudents(){
+  return `<div class="card noprint"><div class="row sp"><span class="muted">📲 احفظ أرقام الشباب في جهات اتصال موبايلك${state.gr?' (المرحلة المختارة فقط)':''}، تبدأ أسماؤهم بـ«${VCF_PFX}» فتتجمع في مكان واحد.</span><button class="btn pri" data-act="vcfAll">📲 حفظ الأسماء على الموبايل</button></div></div>`+vStudents0();
+}
 function vAtt0(){
   const d=state.att,rec=db.att[d]||{},list=fsorted();
   const c={P:0,A:0,E:0};Object.values(rec).forEach(v=>c[v]!=null&&c[v]++);
@@ -1051,11 +1077,11 @@ const ACT_PERM={
   goFu:'fu',fuNew:'fu',fuSave:'fu',fuClose:'fu',fuDone:'fu',fuDel:'fuDel',
   gneed:'msg',gsel:'msg',gwho:'msg',gpreset:'msg',gwa:'msg',gnext:'msg',gsmsone:'msg',gsms:'msg',gsmslog:'msg',gsmsno:'msg',gcopym:'msg',gcopyn:'msg',greset:'msg',
   csvSum:'rep',csvMat:'rep',cardOne:'rep',cardsAll:'rep',mRpt:'rep',asgForm:'asg',asgRemind:'asg',asgCopyRem:'asg',asgGo:'asg',asgFill:'asg',asgF:'asg',asgPrint:'asg',asgDone:'fu',
-  mergeG:'cfg',twinG:'stu',undoMerge:'cfg',scanOpen:'att',scanGo:'att',scanCam:'att',restA:'att',dateMgr:'cfg',dateMove:'cfg',dateDel:'cfg',bgClear:'cfg',bgDef:'cfg',saveSet:'cfg',exp:'cfg',csvStu:'cfg',sample:'cfg',wipe:'cfg',
+  mergeG:'cfg',vcfAll:'contact',twinG:'stu',undoMerge:'cfg',scanOpen:'att',scanGo:'att',scanCam:'att',restA:'att',dateMgr:'cfg',dateMove:'cfg',dateDel:'cfg',bgClear:'cfg',bgDef:'cfg',saveSet:'cfg',exp:'cfg',csvStu:'cfg',sample:'cfg',wipe:'cfg',
   syncRules:'cfg',syncGen:'cfg',syncConnect:'cfg',syncPaste:'cfg',syncCode:'cfg',syncOff:'cfg'};
 const DIS_ACT=new Set(['setAtt']);
 const TAB_PERM={msg:'msg'};
-const LOG_ACT={csvStu:'تصدير قائمة الشباب (CSV)',csvSum:'تصدير ملخص الشباب (CSV)',csvMat:'تصدير جدول الحضور (CSV)'};
+const LOG_ACT={csvStu:'تصدير قائمة الشباب (CSV)',csvSum:'تصدير ملخص الشباب (CSV)',csvMat:'تصدير جدول الحضور (CSV)',vcfAll:'تصدير الأسماء لجهات الاتصال (VCF)'};
 const ADM_ACT=new Set(['userAdd','userEdit','userSave','userDel','secOff','logClear']);
 const LBK='youthTracker.lastbk';
 const SESK='youthTracker.sess',FAILK='youthTracker.fail',LOGK='youthTracker.log',LUK='youthTracker.lastu';
@@ -1725,9 +1751,10 @@ const _closeM=closeM;closeM=function(){scanStop();return _closeM.apply(this,argu
 document.addEventListener('keydown',e=>{if(e.target&&e.target.id==='scIn'&&e.key==='Enter'){e.preventDefault();if(secOn()&&!can('att'))return;scanSubmit(e.target.value)}});
 document.addEventListener('click',e=>{
   const t=e.target.closest('[data-act]');if(!t)return;const a=t.dataset.act;
-  if(!['scanOpen','scanGo','scanCam','scanClose','attView','restA','notifOn'].includes(a))return;
+  if(!['scanOpen','scanGo','scanCam','scanClose','attView','restA','notifOn','vcfAll'].includes(a))return;
   if(secOn()&&!ME)return;
   if(ACT_PERM[a]&&!can(ACT_PERM[a]))return;
+  if(a==='vcfAll'){if(LOG_ACT[a])logEv(LOG_ACT[a]);vcfExport();return}
   if(a==='scanOpen')scanOpen();
   else if(a==='scanGo'){const i=$('#scIn');if(i)scanSubmit(i.value)}
   else if(a==='scanCam')scanCam();
