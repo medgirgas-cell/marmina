@@ -153,18 +153,9 @@ body.locked header,body.locked nav,body.locked main{display:none}
 .asr select{max-width:170px}
 #prt .asp{page-break-after:always;break-after:page}
 #prt .asp:last-child{page-break-after:auto;break-after:auto}
-
-/* v2 */
-.sy-ok{background:#1e8e4e!important;border-color:#1e8e4e!important;color:#fff!important;font-weight:bold}
-.sy-busy,.sy-idle{background:#f2a900!important;border-color:#f2a900!important;color:#222!important}
-.sy-err{background:#c62828!important;border-color:#c62828!important;color:#fff!important}
-.sy-offline{background:#6b7385!important;border-color:#6b7385!important;color:#fff!important}
-.agrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(98px,1fr));gap:8px}
-.atile{border:2px solid var(--bd);background:var(--card);color:var(--tx);border-radius:12px;padding:8px 4px;display:flex;flex-direction:column;align-items:center;gap:4px;font:inherit;cursor:pointer}
-.atile span{font-size:12px;text-align:center;line-height:1.3}
-.atile i{font-style:normal;font-size:11px;color:var(--mu)}
-.atile.P{border-color:var(--ok);background:var(--okb)}.atile.A{border-color:var(--no);background:var(--nob)}.atile.E{border-color:var(--wa);background:var(--wab)}
-#prt .idf svg{display:block;width:36mm;height:6mm}
+#updBar{position:fixed;left:10px;right:10px;bottom:10px;z-index:9000;background:var(--card);color:var(--tx);border:2px solid var(--pr2);border-radius:12px;padding:10px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;box-shadow:0 6px 24px rgba(0,0,0,.25)}
+#updBar span{flex:1;min-width:150px;font-weight:700}
+@media print{#updBar{display:none!important}}
 </style>
 </head>
 <body>
@@ -196,14 +187,13 @@ body.locked header,body.locked nav,body.locked main{display:none}
 const KEY='youthTracker.v1';
 const DEF_BMSG='كل سنة وانت طيب يا {الاسم} 🎂 ربنا يبارك في عمرك ويحفظك ويكمل فرحتك';
 const DEF_MSG='سلام ونعمة يا {الاسم}.. افتقدناك في الاجتماع وكنا عاوزين نطمن عليك. ربنا يحفظك';
-const DEF_RMSG='سلام ونعمة {الاسم} 🙏\nباقي عليك {العدد} من {الإجمالي} للافتقاد هذا الأسبوع:\n{الأسماء}\nربنا يعوّض تعبك ❤️';
 let db=load();
 const state={tab:'home',q:'',att:today(),ev:today(),fuF:'pending',repQ:'',gr:''};
 let bc=null;try{bc=new BroadcastChannel('youthTracker')}catch(e){}
 
 function load(){
-  try{const d=JSON.parse(localStorage.getItem(KEY));if(d&&d.students){d.settings=Object.assign({msg:DEF_MSG,bmsg:DEF_BMSG,bd:14,cls:'شباب ثانوي',theme:'light',lockMin:15},d.settings||{});d.att=d.att||{};d.ev=d.ev||{};d.fu=d.fu||[];d.users=Array.isArray(d.users)?d.users:[];d.asg=(d.asg&&typeof d.asg==='object')?d.asg:{};return d}}catch(e){}
-  return {students:[],att:{},ev:{},fu:[],users:[],asg:{},settings:{msg:DEF_MSG,bmsg:DEF_BMSG,bd:14,cls:'شباب ثانوي',theme:'light',lockMin:15}};
+  try{const d=JSON.parse(localStorage.getItem(KEY));if(d&&d.students){d.settings=Object.assign({msg:DEF_MSG,bmsg:DEF_BMSG,bd:14,cls:'شباب ثانوي',theme:'light',lockMin:15},d.settings||{});d.att=d.att||{};d.ev=d.ev||{};d.fu=d.fu||[];d.users=Array.isArray(d.users)?d.users:[];d.asg=(d.asg&&typeof d.asg==='object')?d.asg:{};d.nodup=(d.nodup&&typeof d.nodup==='object')?d.nodup:{};return d}}catch(e){}
+  return {students:[],att:{},ev:{},fu:[],users:[],asg:{},nodup:{},settings:{msg:DEF_MSG,bmsg:DEF_BMSG,bd:14,cls:'شباب ثانوي',theme:'light',lockMin:15}};
 }
 /* تسجيل افتقاد: يغلق مهمة الغياب المفتوحة في مكانها (فتبقى مرتبطة بتاريخ الغياب فلا يعود الاسم)، ويُنهي المتابعات القادمة السابقة */
 function recordFu(sid,x){
@@ -284,7 +274,7 @@ function render(){
   hideLock();
   if(TAB_PERM[state.tab]&&!can(TAB_PERM[state.tab]))state.tab='home';
   document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('on',b.dataset.tab===state.tab));
-  const oc=(secOn()&&asgOn()&&!can('asg'))?myPending():db.fu.filter(f=>f.open&&stu(f.sid)&&myScope(f.sid)).length,fb=document.querySelector('#nav [data-tab="fu"]');
+  const oc=(secOn()&&asgOn()&&!can('cfg'))?myPending():db.fu.filter(f=>f.open&&stu(f.sid)&&myScope(f.sid)).length,fb=document.querySelector('#nav [data-tab="fu"]');
   if(fb)fb.innerHTML='الافتقاد'+(oc?' <span class="badge r">'+oc+'</span>':'');
   const nb=upBd().length,hb=document.querySelector('#nav [data-tab="home"]');
   if(hb)hb.innerHTML='الرئيسية'+(nb?' <span class="badge y">🎂 '+nb+'</span>':'');
@@ -315,18 +305,20 @@ function flat(d){
   Object.keys(d.ev).forEach(dt=>Object.keys(d.ev[dt]).forEach(id=>m['e:'+dt+':'+id]=JSON.stringify(d.ev[dt][id])));
   d.fu.forEach(f=>m['f:'+f.id]=JSON.stringify(f));
   (d.users||[]).forEach(u=>m['u:'+u.id]=JSON.stringify(u));
+  Object.keys(d.nodup||{}).forEach(k=>m['n:'+k]='1');
   Object.keys(d.asg||{}).forEach(ws=>Object.keys(d.asg[ws]).forEach(id=>m['g:'+ws+':'+id]=d.asg[ws][id]));
-  ['msg','bmsg','rmsg','bd','cls','lockMin'].forEach(k=>{if(d.settings[k]!=null)m['x:'+k]=JSON.stringify(d.settings[k])});
+  ['msg','bmsg','bd','cls','lockMin'].forEach(k=>{if(d.settings[k]!=null)m['x:'+k]=JSON.stringify(d.settings[k])});
   return m;
 }
 function unflat(m){
-  const o={students:[],att:{},ev:{},fu:[],users:[],asg:{},set:{}};
+  const o={students:[],att:{},ev:{},fu:[],users:[],asg:{},nodup:{},set:{}};
   for(const k in m){const t=k[0],v=m[k];
     if(t==='s')o.students.push(JSON.parse(v));
     else if(t==='a'){const [,dt,id]=k.split(':');(o.att[dt]=o.att[dt]||{})[id]=v}
     else if(t==='e'){const [,dt,id]=k.split(':');(o.ev[dt]=o.ev[dt]||{})[id]=JSON.parse(v)}
     else if(t==='f')o.fu.push(JSON.parse(v));
     else if(t==='u')o.users.push(JSON.parse(v));
+    else if(t==='n')o.nodup[k.slice(2)]=1;
     else if(t==='g'){const [,ws,id]=k.split(':');(o.asg[ws]=o.asg[ws]||{})[id]=v}
     else if(t==='x')o.set[k.slice(2)]=JSON.parse(v);
   }
@@ -342,19 +334,15 @@ function merge3(b,l,r){
 const sameMap=(a,b)=>{const ka=Object.keys(a);return ka.length===Object.keys(b).length&&ka.every(k=>a[k]===b[k])};
 function dedupeFu(){const m={};db.fu.forEach(f=>{if(!f.sess)return;const k=f.sid+'|'+f.sess;if(!m[k]||(m[k].open&&!f.open))m[k]=f});db.fu=db.fu.filter(f=>!f.sess||m[f.sid+'|'+f.sess]===f)}
 function applyFlat(mf){
-  const o=unflat(mf);db.students=o.students;db.att=o.att;db.ev=o.ev;db.fu=o.fu;db.users=o.users;db.asg=o.asg;Object.assign(db.settings,o.set);dedupeFu();saveLocal();
+  const o=unflat(mf);db.students=o.students;db.att=o.att;db.ev=o.ev;db.fu=o.fu;db.users=o.users;db.asg=o.asg;db.nodup=o.nodup;Object.assign(db.settings,o.set);dedupeFu();saveLocal();
   const a=document.activeElement;
   if(a&&/INPUT|TEXTAREA|SELECT/.test(a.tagName)&&a.closest('#main'))pendingRender=true;else{applyTheme();render()}
 }
-let PRESN=0,PRESL=[];const PRES_TTL=75000;
-const devWord=n=>n===1?'جهاز واحد':n===2?'جهازان':n<=10?n+' أجهزة':n+' جهازًا';
 function setStat(s,m){
   sStat={s,m:m||''};const c=$('#syncChip');if(!c)return;
   const tm=new Date();const hm=String(tm.getHours()).padStart(2,'0')+':'+String(tm.getMinutes()).padStart(2,'0');
-  const dv=PRESN>0?' • '+devWord(PRESN):'';
-  c.textContent={off:'☁ المزامنة: غير مفعّلة',busy:'☁ جارٍ المزامنة…',ok:'☁ متزامن ✓'+dv,idle:'☁ المزامنة مفعّلة'+dv,offline:'☁ غير متصل',err:'☁ ⚠ خطأ في المزامنة'}[s]||'☁';
-  c.title=(m||'')+(s==='ok'?' — آخر مزامنة '+hm:'');
-  c.className='btn sm sy-'+s;
+  c.textContent={off:'☁ المزامنة: غير مفعّلة',busy:'☁ جارٍ المزامنة…',ok:'☁ متزامن ✓ '+hm,idle:'☁ المزامنة مفعّلة',offline:'☁ غير متصل',err:'☁ ⚠ خطأ في المزامنة'}[s]||'☁';
+  c.title=m||'';
 }
 function syncErr(e){
   if(e&&e.name==='OperationError')return 'كلمة السر غير مطابقة لبيانات هذه الغرفة';
@@ -402,7 +390,7 @@ async function connectSync(url,room,pass){
   toast('جارٍ الاتصال…');
   const ok=await syncNow();
   if(!ok){const m=sStat.m||'تعذر الاتصال';SYNC=old;sKey=null;saveSync();setStat(old&&old.on?'idle':'off');toast('⚠ '+m);render();return}
-  saveSync();toast('تم تفعيل المزامنة ✓');render();beat();
+  saveSync();toast('تم تفعيل المزامنة ✓');render();
 }
 function syncCodeOf(){return 'YT1.'+btoa(unescape(encodeURIComponent(JSON.stringify({u:SYNC.url,r:SYNC.room,p:SYNC.pass}))))}
 function syncCard(){
@@ -410,8 +398,7 @@ function syncCard(){
   const RULES='{"rules":{".read":false,".write":false,"youth":{"$room":{".read":true,".write":true}}}}';
   return `<div class="card"><h2>☁ المزامنة بين الأجهزة</h2>
   ${on?`<p>✅ المزامنة <b>مفعّلة</b>: أي تعديل يظهر على باقي الأجهزة خلال ثوانٍ. ${sStat.s==='err'?`<span class="badge r">${esc(sStat.m)}</span>`:''}</p>
-  <div class="row"><button class="btn pri" data-act="syncNow">🔄 مزامنة الآن</button><button class="btn" data-act="syncCode">🔗 رمز الربط لجهاز آخر</button><button class="btn dng" data-act="syncOff">إيقاف المزامنة</button></div><div id="syncCodeBox" style="margin-top:10px"></div>
-  <div class="card" style="background:var(--in);margin:10px 0 0"><b>🟢 الأجهزة المفتوحة الآن: <span id="devCnt">${PRESN?devWord(PRESN):'—'}</span></b><div id="devList" class="muted" style="margin-top:6px;line-height:1.9">${devListHtml()}</div></div>`
+  <div class="row"><button class="btn pri" data-act="syncNow">🔄 مزامنة الآن</button><button class="btn" data-act="syncCode">🔗 رمز الربط لجهاز آخر</button><button class="btn dng" data-act="syncOff">إيقاف المزامنة</button></div><div id="syncCodeBox" style="margin-top:10px"></div>`
   :`<p class="muted" style="margin-top:0">لتستخدم النظام من أكثر من جهاز (موبايل + كمبيوتر + خادم آخر) بنفس البيانات. تحتاج تجهيزًا لمرة واحدة بحساب جوجل (مجاني).</p>
   <details><summary><b>① خطوات التجهيز</b></summary><ol class="muted" style="line-height:2">
   <li>ادخل <b>console.firebase.google.com</b> واضغط <b>Create a project</b> (اسم أي شيء، وعطّل Google Analytics).</li>
@@ -429,48 +416,21 @@ function syncCard(){
 }
 function syncInit(){
   setStat(SYNC&&SYNC.on?'idle':'off');
-  if(SYNC&&SYNC.on){setTimeout(syncNow,400);setTimeout(beat,2500)}
-  setInterval(beat,30000);
-  document.addEventListener('visibilitychange',()=>{if(document.hidden)byeSync();else beat()});
-  window.addEventListener('pagehide',byeSync);
+  if(SYNC&&SYNC.on)setTimeout(syncNow,400);
   setInterval(async()=>{if(!SYNC||!SYNC.on||sBusy||document.hidden||!navigator.onLine)return;try{if(needPull((await fb('/heads'))||{}))syncNow()}catch(e){}},15000);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)syncNow()});
   window.addEventListener('online',()=>syncNow());
   document.addEventListener('focusout',()=>{if(pendingRender)setTimeout(()=>{const a=document.activeElement;if(!a||!/INPUT|TEXTAREA|SELECT/.test(a.tagName)){pendingRender=false;applyTheme();render()}},60)});
 }
 
-/* ---------- الأجهزة المتصلة في وقت واحد (Presence) ---------- */
-function devLabel(){const u=navigator.userAgent;return /Android/.test(u)?'📱 أندرويد':/iPhone|iPad/.test(u)?'📱 آيفون/آيباد':/Windows/.test(u)?'💻 ويندوز':/Mac/.test(u)?'💻 ماك':/Linux/.test(u)?'💻 لينكس':'🖥 جهاز'}
-function devListHtml(){return PRESL.length?PRESL.map(x=>(x.me?'📍 ':'🟢 ')+esc(x.d)+(x.n?' — '+esc(x.n):'')+(x.me?' <b>(هذا الجهاز)</b>':'')).join('<br>'):'<span class="muted">لا توجد بيانات بعد</span>'}
-async function beat(){
-  if(!SYNC||!SYNC.on||!navigator.onLine||document.hidden)return;
-  try{
-    if(!sKey)sKey=await mkKey(SYNC.pass,SYNC.room);
-    const info=await encO({n:ME?ME.name:'',d:devLabel()});
-    await fb('/pres/'+SYNC.dev,'PUT',{t:{'.sv':'timestamp'},i:info});
-    const all=(await fb('/pres'))||{};
-    const ref=(all[SYNC.dev]&&all[SYNC.dev].t)||Date.now(),live=[],del={};
-    for(const id in all){const p=all[id];if(!p||!p.t){del[id]=null;continue}
-      if(ref-p.t>86400000){del[id]=null;continue}
-      if(ref-p.t<=PRES_TTL){let x={n:'',d:'🖥 جهاز'};try{x=await decO(p.i)}catch(e){}live.push({id,n:x.n,d:x.d,me:id===SYNC.dev})}}
-    if(Object.keys(del).length)fb('/pres','PATCH',del).catch(()=>{});
-    live.sort((a,b)=>(b.me?1:0)-(a.me?1:0));
-    PRESL=live;PRESN=live.length;setStat(sStat.s,sStat.m);
-    const dl=$('#devList');if(dl)dl.innerHTML=devListHtml();const dc=$('#devCnt');if(dc)dc.textContent=devWord(PRESN);
-  }catch(e){}
-}
-function byeSync(){if(SYNC&&SYNC.on){try{fetch(SYNC.url+'/youth/'+SYNC.room+'/pres/'+SYNC.dev+'.json',{method:'DELETE',keepalive:true})}catch(e){}}}
-
 /* ---------- duplicates ---------- */
 function nName(s){return String(s||'').replace(/[\u064B-\u065F\u0670\u0640]/g,'').replace(/[أإآٱ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه').replace(/ؤ/g,'و').replace(/ئ/g,'ي').replace(/\s+/g,' ').trim().toLowerCase()}
 function nPhone(p){let d=digits(p);if(d.startsWith('0020'))d=d.slice(4);else if(d.startsWith('20')&&d.length>=12)d=d.slice(2);return d.replace(/^0+/,'')}
 function lev(a,b){const m=a.length,n=b.length;if(!m)return n;if(!n)return m;let p=[];for(let j=0;j<=n;j++)p[j]=j;for(let i=1;i<=m;i++){let c=[i];for(let j=1;j<=n;j++)c[j]=Math.min(p[j]+1,c[j-1]+1,p[j-1]+(a[i-1]===b[j-1]?0:1));p=c}return p[n]}
-const isTw=(a,b)=>!!a&&!!b&&((a.tw||[]).includes(b.id)||(b.tw||[]).includes(a.id));
-function markTw(ids){ids.forEach(a=>{const x=stu(a);if(!x)return;const set=new Set(x.tw||[]);ids.forEach(b=>{if(b!==a)set.add(b)});x.tw=[...set]})}
 function dupWhy(n,ph,s){
   const sn=nName(s.name);
   if(n&&sn===n)return 'اسم مطابق';
-  if(ph.length>=7&&nPhone(s.phone)===ph)return (n&&sn&&n!==sn)?'نفس رقم التليفون — ربما توأم/إخوة':'نفس رقم التليفون';
+  if(ph.length>=7&&nPhone(s.phone)===ph)return 'نفس رقم التليفون';
   if(n&&sn&&n.length>=6&&sn.length>=6){
     const [sh,lo]=n.length<=sn.length?[n,sn]:[sn,n];
     if(sh.split(' ').length>=2&&lo.startsWith(sh+' '))return 'اسم مشابه';
@@ -480,43 +440,39 @@ function dupWhy(n,ph,s){
 }
 function findDups(name,phone,ex){
   const n=nName(name),ph=nPhone(phone),out=[];
-  const exs=ex?stu(ex):null;db.students.forEach(s=>{if(s.id===ex||isTw(exs,s))return;const w=dupWhy(n,ph,s);if(w)out.push({s,why:w})});
+  db.students.forEach(s=>{if(s.id===ex||(ex&&isNoDup(ex,s.id)))return;const w=dupWhy(n,ph,s);if(w)out.push({s,why:w})});
   return out;
 }
 function dupWarn(){
   const w=$('#dupw');if(!w)return 0;
   const id=$('#fSave').dataset.id,d=findDups($('#fN').value,$('#fP').value,id);
-  w.innerHTML=d.length?`<div class="card" style="background:var(--wab);border-color:var(--wa)"><b>⚠ تنبيه: تكرار محتمل</b>${d.map(x=>`<div class="row sp" style="margin-top:6px"><span>${esc(x.s.name)} <span class="badge y">${x.why}</span> <span class="muted">${esc(x.s.phone||'')}</span></span><a href="#" data-act="profile" data-id="${x.s.id}">فتح الموجود</a></div>`).join('')}<div style="margin-top:8px"><button class="btn sm" data-act="saveStudent" data-id="${esc(id)}" data-force="1">حفظ كشخص مختلف (توأم / أخ)</button></div></div>`:'';
+  w.innerHTML=d.length?`<div class="card" style="background:var(--wab);border-color:var(--wa)"><b>⚠ تنبيه: تكرار محتمل</b>${d.map(x=>`<div class="row sp" style="margin-top:6px"><span>${esc(x.s.name)} <span class="badge y">${x.why}</span> <span class="muted">${esc(x.s.phone||'')}</span></span><span class="row"><a href="#" data-act="profile" data-id="${x.s.id}">فتح الموجود</a><button class="btn sm" data-act="dupMergeForm" data-id="${x.s.id}">🔗 دمج معه</button></span></div>`).join('')}<div style="margin-top:8px"><button class="btn sm pri" data-act="saveStudent" data-id="${esc(id)}" data-force="1">✓ شخصان مختلفان (توأم) — احفظ ولا تسأل مرة أخرى</button></div><div class="muted" style="font-size:12px;margin-top:6px">توائم أو إخوة بنفس الرقم والعنوان؟ اختر «شخصان مختلفان» وسيتذكّر النظام ذلك فلا يظهر هذا التنبيه لهما ثانيةً.</div></div>`:'';
   return d.length;
 }
 let DG=[];
 function dupGroups(){
   const ss=sorted(),par=ss.map((_,i)=>i),f=i=>par[i]===i?i:(par[i]=f(par[i]));
   const nn=ss.map(s=>nName(s.name)),pp=ss.map(s=>nPhone(s.phone));
-  for(let i=0;i<ss.length;i++)for(let j=i+1;j<ss.length;j++){if(dupWhy(nn[i],pp[i],ss[j])&&!isTw(ss[i],ss[j]))par[f(j)]=f(i)}
+  for(let i=0;i<ss.length;i++)for(let j=i+1;j<ss.length;j++){if(!isNoDup(ss[i].id,ss[j].id)&&dupWhy(nn[i],pp[i],ss[j]))par[f(j)]=f(i)}
   const m={};ss.forEach((s,i)=>{(m[f(i)]=m[f(i)]||[]).push(s)});
   return Object.values(m).filter(g=>g.length>1);
 }
 const recCount=id=>Object.values(db.att).filter(d=>d[id]!=null).length+Object.values(db.ev).filter(d=>d[id]).length+db.fu.filter(f=>f.sid===id).length;
 function mergeInto(pid,oid){
   const p=stu(pid),o=stu(oid);if(!p||!o||pid===oid)return;
-  ['phone','parentPhone','address','birth','grade','photo'].forEach(k=>{if(!p[k]&&o[k])p[k]=o[k]});
-  if(o.tw&&o.tw.length)p.tw=[...new Set([...(p.tw||[]),...o.tw])].filter(x=>x!==pid&&x!==oid);
+  ['phone','parentPhone','address','birth','grade'].forEach(k=>{if(!p[k]&&o[k])p[k]=o[k]});
   if(o.notes&&!(p.notes||'').includes(o.notes))p.notes=[p.notes,o.notes].filter(Boolean).join(' | ');
   Object.values(db.att).forEach(d=>{if(d[oid]!=null){if(d[pid]==null||d[oid]==='P')d[pid]=d[oid];delete d[oid]}});
   Object.values(db.ev).forEach(d=>{if(d[oid]){if(!d[pid])d[pid]=d[oid];delete d[oid]}});
   db.fu.forEach(f=>{if(f.sid===oid)f.sid=pid});
   const m={};db.fu.forEach(f=>{if(!f.sess)return;const k=f.sid+'|'+f.sess;if(!m[k]||(m[k].open&&!f.open))m[k]=f});
   db.fu=db.fu.filter(f=>!f.sess||m[f.sid+'|'+f.sess]===f);
-  asgDrop(oid);db.students=db.students.filter(s=>s.id!==oid);delete G.sel[oid];delete G.sent[oid];
+  asgDrop(oid);nodupDrop(oid);db.students=db.students.filter(s=>s.id!==oid);delete G.sel[oid];delete G.sent[oid];
 }
-const UNDOK='youthTracker.undo';
-function undoSave(){try{localStorage.setItem(UNDOK,JSON.stringify({t:Date.now(),s:db.students,a:db.att,e:db.ev,f:db.fu}))}catch(e){try{localStorage.removeItem(UNDOK)}catch(x){}}}
 function dupReview(){
-  DG=dupGroups();let un=null;try{un=JSON.parse(localStorage.getItem(UNDOK))}catch(e){}
+  DG=dupGroups();
   openM(`<div class="row sp"><h2 style="margin:0">🔍 مراجعة التكرار</h2><button class="btn sm" data-act="closeM">✕</button></div>
-  ${un?`<div class="card" style="background:var(--in)"><div class="row sp"><span class="muted">آخر دمج بتاريخ ${new Date(un.t).toLocaleString('ar-EG')}</span><button class="btn sm" data-act="undoMerge">↩ تراجع عن آخر دمج</button></div></div>`:''}
-  ${DG.length?`<p class="muted">لكل مجموعة: اختر <b>الأساسي</b> (الدائرة)، وحدّد بالمربعات من تريد <b>دمجه</b> فيه. من لم تحدده يُعتبر شخصًا مختلفًا (مثل التوأم) ولن يُقترح دمجه ثانية. أو اضغط «ليسوا مكررين» إن كانوا كلهم أشخاصًا مختلفين.</p>`+DG.map((g,gi)=>{const best=g.map(s=>recCount(s.id)).reduce((b,v,i,a)=>v>a[b]?i:b,0);return `<div class="card" style="margin-top:10px"><div class="muted">مجموعة ${gi+1}</div>${g.map((s,i)=>`<div class="row" style="padding:5px 0;flex-wrap:nowrap"><label title="الأساسي" style="margin:0;color:var(--tx)"><input type="radio" name="dg${gi}" value="${s.id}" ${i===best?'checked':''}></label><label title="دمج" style="margin:0;color:var(--tx)"><input type="checkbox" class="dgm${gi}" value="${s.id}" checked></label>${av(s,34)}<span style="font-size:15px"><b>${esc(s.name)}</b> ${grBadge(s)} <span class="muted">${esc(s.phone||'بدون رقم')}${s.birth?' • '+fd(s.birth):''} • ${recCount(s.id)} سجل</span></span></div>`).join('')}<div class="row" style="margin-top:6px"><button class="btn pri sm" data-act="mergeG" data-g="${gi}">دمج المحدد في الأساسي</button><button class="btn sm" data-act="twinG" data-g="${gi}">ليسوا مكررين (توأم / إخوة)</button></div></div>`}).join(''):'<div class="empty">لا يوجد تكرار ✓</div>'}`);
+  ${DG.length?`<p class="muted">اختر السجل الأساسي في كل مجموعة ثم اضغط دمج: يُنقل الحضور والتقييم والافتقاد للسجل الأساسي، وتُكمَّل بياناته الناقصة، ويُحذف المكرر. أما إن كانوا توائم أو إخوة بنفس الرقم والعنوان فاضغط «تجاهل» ولن يُسأل عنهم مرة أخرى.</p>`+DG.map((g,gi)=>{const best=g.map(s=>recCount(s.id)).reduce((b,v,i,a)=>v>a[b]?i:b,0);return `<div class="card" style="margin-top:10px"><div class="muted">مجموعة ${gi+1}</div>${g.map((s,i)=>`<label style="display:flex;gap:8px;align-items:center;color:var(--tx);padding:5px 0;font-size:15px"><input type="radio" name="dg${gi}" value="${s.id}" ${i===best?'checked':''}> <b>${esc(s.name)}</b> ${grBadge(s)} <span class="muted">${esc(s.phone||'بدون رقم')} • ${recCount(s.id)} سجل</span></label>`).join('')}<button class="btn pri sm" data-act="mergeG" data-g="${gi}">🔗 دمج المجموعة</button> <button class="btn sm" data-act="ignG" data-g="${gi}">تجاهل — أشخاص مختلفون (توأم)</button></div>`}).join(''):'<div class="empty">لا يوجد تكرار ✓</div>'}${ignList()}`);
 }
 
 /* ---------- grade + birthday ---------- */
@@ -630,42 +586,16 @@ function profCharts(t,e){
   return `<div class="chart" style="margin:12px 0;justify-content:space-around"><div>${donut([{v:t.p,c:COL.P},{v:t.a,c:COL.A},{v:t.e,c:COL.E}],t.pct==null?'—':t.pct+'%','حضور '+t.p+' من '+t.tot,135)}</div><div style="flex:1;min-width:210px">${EVC.map(([k,l,c])=>hbar(l,e[k]||0,5,c,f1(e[k])+'/5')).join('')}</div></div>`;
 }
 
-function vStudents0(){
+function vStudents(){
   const q=state.q.trim(),dg=dupGroups();
   const list=fsorted().filter(s=>!q||(s.name+' '+(can('contact')?s.phone+' '+s.address:'')).includes(q));
-  return (dg.length?`<div class="card noprint" style="background:var(--wab);border-color:var(--wa)"><div class="row sp"><span>⚠ يوجد <b>${dg.length}</b> مجموعة أسماء مكررة محتملة</span><button class="btn sm pri" data-act="dupRev">مراجعة ودمج</button></div></div>`:'')+`<div class="card"><div class="row sp"><input id="q" placeholder="🔍 بحث بالاسم أو الرقم أو العنوان" value="${esc(state.q)}" style="flex:1;min-width:200px"><button class="btn pri" data-act="addStudent">+ إضافة شاب</button>${can('rep')?'<button class="btn" data-act="cardsAll">🪪 طباعة البطاقات</button>':''}</div>${grChips()}</div>
+  return (dg.length?`<div class="card noprint" style="background:var(--wab);border-color:var(--wa)"><div class="row sp"><span>⚠ يوجد <b>${dg.length}</b> مجموعة أسماء متشابهة محتملة (قد تكونوا توائم)</span><button class="btn sm pri" data-act="dupRev">مراجعة: دمج أو تجاهل</button></div></div>`:'')+`<div class="card"><div class="row sp"><input id="q" placeholder="🔍 بحث بالاسم أو الرقم أو العنوان" value="${esc(state.q)}" style="flex:1;min-width:200px"><button class="btn pri" data-act="addStudent">+ إضافة شاب</button>${can('rep')?'<button class="btn" data-act="cardsAll">🪪 طباعة البطاقات</button>':''}</div>${grChips()}</div>
   <div class="card"><div class="tw"><table><tr><th>م</th><th>الاسم</th><th>المرحلة</th><th>التليفون</th><th>العنوان</th><th>تواصل</th><th></th></tr>
   ${list.map((s,i)=>`<tr><td>${i+1}</td><td>${av(s)}<a href="#" data-act="profile" data-id="${s.id}"><b>${esc(s.name)}</b></a>${bdBadge(s)}${s.notes?`<div class="muted">📝 ${esc(s.notes)}</div>`:''}</td><td>${grBadge(s)}</td><td>${can('contact')?esc(s.phone):'—'}</td><td>${can('contact')?esc(s.address):'—'}</td><td>${contact(s)}</td><td><button class="btn sm" data-act="editStudent" data-id="${s.id}">تعديل</button> <button class="btn sm dng" data-act="delStudent" data-id="${s.id}">حذف</button></td></tr>`).join('')}</table></div>
   ${list.length?'':'<div class="empty">لا توجد نتائج</div>'}</div>`;
 }
 
-const VCF_PFX='شباب';
-const vEsc=s=>String(s==null?'':s).replace(/\\/g,'\\\\').replace(/\r?\n/g,'\\n').replace(/([,;])/g,'\\$1');
-const vPh=p=>String(p||'').replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[^\d+]/g,'');
-function vcfBuild(list){
-  let n=0,skip=0;const out=[];
-  list.forEach(s=>{
-    const p=vPh(s.phone),pp=vPh(s.parentPhone);if(p.length<7&&pp.length<7){skip++;return}
-    const nm=VCF_PFX+' '+s.name,L=['BEGIN:VCARD','VERSION:3.0','FN:'+vEsc(nm),'N:'+vEsc(nm)+';;;;','ORG:'+vEsc(db.settings.cls)];
-    if(p.length>=7)L.push('TEL;TYPE=CELL:'+p);
-    if(pp.length>=7)L.push('item1.TEL:'+pp,'item1.X-ABLabel:'+vEsc('ولي أمر '+s.name));
-    if(/^\d{4}-\d{2}-\d{2}$/.test(s.birth||''))L.push('BDAY:'+s.birth);
-    if(s.address)L.push('ADR;TYPE=HOME:;;'+vEsc(s.address)+';;;;');
-    if(s.grade)L.push('NOTE:'+vEsc(s.grade));
-    L.push('END:VCARD');out.push(L.join('\r\n'));n++});
-  return {text:out.join('\r\n')+'\r\n',n,skip};
-}
-async function vcfExport(){
-  const r=vcfBuild(fsorted());if(!r.n){toast('لا يوجد شباب لديهم أرقام تليفون');return}
-  const name='جهات_'+db.settings.cls.replace(/\s+/g,'_')+'.vcf';
-  try{const f=new File([r.text],name,{type:'text/vcard'});if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f],title:'جهات الاتصال'});toast('تم — '+r.n+' جهة'+(r.skip?' (تخطّي '+r.skip+' بدون رقم)':''));return}}catch(e){if(e&&e.name==='AbortError')return}
-  dl(name,r.text,'text/vcard;charset=utf-8');
-  toast('تم تنزيل '+r.n+' جهة'+(r.skip?' (تخطّي '+r.skip+' بدون رقم)':'')+' — افتح الملف من الموبايل واختر حفظ');
-}
-function vStudents(){
-  return `<div class="card noprint"><div class="row sp"><span class="muted">📲 احفظ أرقام الشباب في جهات اتصال موبايلك${state.gr?' (المرحلة المختارة فقط)':''}، تبدأ أسماؤهم بـ«${VCF_PFX}» فتتجمع في مكان واحد.</span><button class="btn pri" data-act="vcfAll">📲 حفظ الأسماء على الموبايل</button></div></div>`+vStudents0();
-}
-function vAtt0(){
+function vAtt(){
   const d=state.att,rec=db.att[d]||{},list=fsorted();
   const c={P:0,A:0,E:0};Object.values(rec).forEach(v=>c[v]!=null&&c[v]++);
   const past=sessions().slice(-8).reverse();
@@ -676,13 +606,6 @@ function vAtt0(){
   ${list.length?`<div class="tw"><table>${list.map(s=>{const v=rec[s.id],t=stats(s.id);return `<tr><td>${av(s,34)}<a href="#" data-act="profile" data-id="${s.id}">${esc(s.name)}</a>${t.need?' <span class="badge r">افتقاد</span>':''}</td><td><span class="tg">${[['P','حاضر'],['A','غائب'],['E','بعذر']].map(([k,l])=>`<button class="${k} ${v===k?'on':''}" data-act="setAtt" data-id="${s.id}" data-v="${k}">${l}</button>`).join('')}</span></td><td class="noprint">${v==='A'?contact(s):''}</td></tr>`}).join('')}</table></div>`:'<div class="empty">أضف الشباب أولًا</div>'}</div>`;
 }
 
-function vAtt(){
-  let h=vAtt0();const d=state.att,rec=db.att[d]||{},list=fsorted(),grid=state.attView==='grid';
-  const bar=`<div class="card noprint"><div class="row"><button class="btn pri" data-act="scanOpen">📷 تسجيل حضور بالباركود</button><div class="tg"><button class="P ${grid?'':'on'}" data-act="attView" data-v="list">☰ قائمة</button><button class="P ${grid?'on':''}" data-act="attView" data-v="grid">🖼 بالصور</button></div><button class="btn" data-act="print">🖨 طباعة كشف الحضور</button>${grid?'<button class="btn dng" data-act="restA">الباقي غائب</button>':''}</div>${grid?'<div class="muted" style="margin-top:6px">اضغط على صورة الشاب لتسجيل حضوره (اضغط ثانية للإلغاء). للغياب بعذر استخدم عرض القائمة.</div>':''}</div>`;
-  if(grid){const gh=`<div class="agrid">${list.map(s=>{const v=rec[s.id];return `<button class="atile ${v||''}" data-act="setAtt" data-id="${s.id}" data-v="P">${av(s,64)}<span>${esc(s.name)}</span><i>${v==='P'?'✔ حاضر':v==='A'?'غائب':v==='E'?'بعذر':'&nbsp;'}</i></button>`}).join('')}</div>`;
-    h=h.replace(/<div class="tw"><table>[\s\S]*<\/table><\/div>/,()=>gh)}
-  return bar+h;
-}
 function vEval(){
   const d=state.ev,rec=db.ev[d]||{},att=db.att[d]||{},list=fsorted();
   const sel=v=>`<option value="">—</option>`+[0,1,2,3,4,5].map(n=>`<option value="${n}" ${String(v)===String(n)?'selected':''}>${n}</option>`).join('');
@@ -774,7 +697,6 @@ function vMsg(){
 function vSetAdmin(){
   return `<div class="card"><h2>الإعدادات</h2><div class="f"><label>اسم الفصل / الاجتماع</label><input id="sCls" value="${esc(db.settings.cls)}"></div>
   <div class="f"><label>نص رسالة الافتقاد (استخدم {الاسم} لإدراج الاسم الأول)</label><textarea id="sMsg">${esc(db.settings.msg)}</textarea></div>
-  <div class="f"><label>نص رسالة تذكير الخدام بالافتقاد (استخدم {الاسم} {العدد} {الإجمالي} {الأسماء})</label><textarea id="sRm">${esc(db.settings.rmsg||DEF_RMSG)}</textarea></div>
   <div class="f"><label>نص رسالة التهنئة بعيد الميلاد (استخدم {الاسم})</label><textarea id="sBm">${esc(db.settings.bmsg||DEF_BMSG)}</textarea></div>
   <div class="f"><label>التذكير بعيد الميلاد قبلها بـ (يوم)</label><input type="number" id="sBd" min="1" max="60" value="${bdWin()}" style="width:110px"></div>
   <button class="btn pri" data-act="saveSet">حفظ الإعدادات</button></div>
@@ -841,10 +763,11 @@ document.addEventListener('click',e=>{
       const name=$('#fN').value.trim();if(!name){toast('اكتب الاسم');return}
       if(!t.dataset.force&&findDups(name,$('#fP').value,id).length){dupWarn();toast('⚠ يوجد تكرار محتمل — راجع التنبيه');return}
       const o={photo:FPH,name,phone:$('#fP').value.trim(),parentPhone:$('#fPP').value.trim(),birth:$('#fB').value,address:$('#fA').value.trim(),notes:$('#fT').value.trim(),grade:$('#fG').value};
-      let sid=id;if(id){Object.assign(stu(id),o)}else{sid=uid();db.students.push(Object.assign({id:sid},o))}
-       if(t.dataset.force){const me=stu(sid);findDups(name,$('#fP').value,sid).forEach(x=>{me.tw=[...new Set([...(me.tw||[]),x.s.id])]})}
+      const dups=t.dataset.force?findDups(name,$('#fP').value,id):[];let sid2=id;
+      if(id){Object.assign(stu(id),o)}else{sid2=uid();db.students.push(Object.assign({id:sid2},o))}
+      dups.forEach(x=>setNoDup(sid2,x.s.id));
       save();closeM();render();toast('تم الحفظ');break}
-    case 'delStudent':{const s=stu(id);if(s&&confirm('حذف '+s.name+' وكل سجلاته؟')){logEv('حذف شاب: '+s.name);asgDrop(id);db.students=db.students.filter(x=>x.id!==id);Object.values(db.att).forEach(d=>delete d[id]);Object.values(db.ev).forEach(d=>delete d[id]);db.fu=db.fu.filter(f=>f.sid!==id);save();render()}break}
+    case 'delStudent':{const s=stu(id);if(s&&confirm('حذف '+s.name+' وكل سجلاته؟')){logEv('حذف شاب: '+s.name);asgDrop(id);nodupDrop(id);db.students=db.students.filter(x=>x.id!==id);Object.values(db.att).forEach(d=>delete d[id]);Object.values(db.ev).forEach(d=>delete d[id]);db.fu=db.fu.filter(f=>f.sid!==id);save();render()}break}
     case 'profile':profile(id);break;
     case 'setAtt':{const d=state.att;db.att[d]=db.att[d]||{};const v=t.dataset.v;if(db.att[d][id]===v)delete db.att[d][id];else db.att[d][id]=v;autoSync(id,d);save();render();break}
     case 'allP':{const d=state.att;db.att[d]=db.att[d]||{};db.students.forEach(s=>{db.att[d][s.id]='P';autoSync(s.id,d,true)});save();render();break}
@@ -858,16 +781,10 @@ document.addEventListener('click',e=>{
     case 'syncCode':{const b=$('#syncCodeBox');b.innerHTML='<div class="muted">انسخ الرمز والصقه في «بيانات الربط ③» على الجهاز الآخر (سري، يحتوي كلمة السر):</div><textarea readonly dir="ltr" style="min-height:70px">'+esc(syncCodeOf())+'</textarea><button class="btn sm" id="cpCode">📋 نسخ</button>';$('#cpCode').onclick=()=>copyT(syncCodeOf());break}
     case 'syncOff':if(confirm('إيقاف المزامنة على هذا الجهاز؟ ستبقى بياناته محفوظة عليه ولن تتزامن.')){SYNC=null;sKey=null;saveSync();localStorage.removeItem(BK);setStat('off');render()}break;
     case 'dupRev':dupReview();break;
-    case 'mergeG':{const gi=t.dataset.g,g=DG[+gi];if(!g)break;const r=document.querySelector('input[name=dg'+gi+']:checked');if(!r)break;const keep=r.value;
-      const chk=[...document.querySelectorAll('.dgm'+gi+':checked')].map(x=>x.value).filter(x=>x!==keep);
-      if(!chk.length){toast('حدّد من تريد دمجه مع الأساسي');break}
-      const names=g.filter(s=>chk.includes(s.id)).map(s=>s.name).join('، ');
-      if(!confirm('دمج ('+names+') في «'+stu(keep).name+'»؟\nيمكنك التراجع بعدها من نافذة مراجعة التكرار.'))break;
-      undoSave();chk.forEach(id=>mergeInto(keep,id));
-      const rest=g.filter(s=>s.id!==keep&&!chk.includes(s.id)).map(s=>s.id);if(rest.length)markTw([keep,...rest]);
-      logEv('دمج سجلات مكررة: '+names);save();render();dupReview();toast('تم الدمج ✓');break}
-    case 'twinG':{const g=DG[+t.dataset.g];if(!g)break;markTw(g.map(s=>s.id));logEv('تأكيد أنهم أشخاص مختلفون: '+g.map(s=>s.name).join('، '));save();render();dupReview();toast('تم — لن يُقترح دمجهم مرة أخرى');break}
-    case 'undoMerge':{let u=null;try{u=JSON.parse(localStorage.getItem(UNDOK))}catch(e){}if(!u)break;if(!confirm('التراجع عن آخر دمج؟'))break;db.students=u.s;db.att=u.a;db.ev=u.e;db.fu=u.f;try{localStorage.removeItem(UNDOK)}catch(e){}logEv('تراجع عن دمج سجلات');save();render();dupReview();toast('تم التراجع ↩');break}
+    case 'mergeG':{const g=DG[+t.dataset.g];if(!g)break;const r=document.querySelector('input[name=dg'+t.dataset.g+']:checked');if(!r)break;
+      const keep=r.value,names=g.filter(s=>s.id!==keep).map(s=>s.name).join('، ');
+      if(!confirm('دمج ('+names+') في السجل الأساسي؟ لا يمكن التراجع.'))break;
+      g.forEach(s=>{if(s.id!==keep)mergeInto(keep,s.id)});logEv('دمج سجلات مكررة: '+names);save();render();dupReview();toast('تم الدمج ✓');break}
     case 'gneed':{G.sel={};db.students.forEach(s=>{if(stats(s.id).need&&myScope(s.id))G.sel[s.id]=1});G.text=null;G.track=true;G.sent={};G.smsPending=false;state.tab='msg';render();window.scrollTo(0,0);break}
     case 'gsel':{const v=t.dataset.v;G.sel={};db.students.forEach(s=>{if(v==='all'||(v==='absent'&&stats(s.id).last==='A')||(v==='need'&&stats(s.id).need&&myScope(s.id))||(v.startsWith('g:')&&s.grade===v.slice(2)))G.sel[s.id]=1});render();break}
     case 'gwho':G.who=t.dataset.v;render();break;
@@ -899,14 +816,14 @@ document.addEventListener('click',e=>{
     case 'fuDone':{const f=db.fu.find(x=>x.id===id);if(f){f.done=true;save();render()}break}
     case 'fuDel':if(confirm('حذف السجل؟')){db.fu=db.fu.filter(x=>x.id!==id);save();render()}break;
     case 'fuF':state.fuF=t.dataset.v;render();break;
-    case 'saveSet':db.settings.cls=$('#sCls').value.trim()||'شباب ثانوي';db.settings.msg=$('#sMsg').value.trim()||DEF_MSG;db.settings.bmsg=$('#sBm').value.trim()||DEF_BMSG;db.settings.rmsg=($('#sRm')?$('#sRm').value.trim():'')||DEF_RMSG;db.settings.bd=Math.max(1,Math.min(60,+$('#sBd').value||14));save();applyTheme();toast('تم الحفظ');break;
+    case 'saveSet':db.settings.cls=$('#sCls').value.trim()||'شباب ثانوي';db.settings.msg=$('#sMsg').value.trim()||DEF_MSG;db.settings.bmsg=$('#sBm').value.trim()||DEF_BMSG;db.settings.bd=Math.max(1,Math.min(60,+$('#sBd').value||14));save();applyTheme();toast('تم الحفظ');break;
     case 'exp':expBackup();break;
     case 'csvStu':dl('الشباب.csv',csv([['الاسم','المرحلة','التليفون','تليفون ولي الأمر','العنوان','تاريخ الميلاد','ملاحظات']].concat(sorted().map(s=>[s.name,s.grade||'',s.phone,s.parentPhone,s.address,s.birth,s.notes]))),'text/csv');break;
     case 'csvSum':dl('ملخص_الشباب.csv',csv([['الاسم','المرحلة','حضور','غياب','نسبة الحضور %','ترانيم','ألحان','استجابة','متوسط /15','عدد الافتقادات']].concat(sorted().map(s=>{const t=stats(s.id),e=evAvg(s.id);return [s.name,s.grade||'',t.p,t.a+t.e,t.pct==null?'':t.pct,f1(e.h),f1(e.l),f1(e.r),f1(e.t),fuCount(s.id)]}))),'text/csv');break;
     case 'csvMat':{const ds=sessions();dl('جدول_الحضور.csv',csv([['الاسم'].concat(ds.map(fd))].concat(sorted().map(s=>[s.name].concat(ds.map(d=>({P:'حاضر',A:'غائب',E:'بعذر'}[db.att[d][s.id]]||'')))))),'text/csv');break}
     case 'print':window.print();break;
     case 'sample':{if(db.students.length&&!confirm('سيتم إضافة بيانات تجريبية للموجود. متابعة؟'))return;sample();break}
-    case 'wipe':if(confirm('مسح كل البيانات نهائيًا؟'+(SYNC&&SYNC.on?'\nتنبيه: المزامنة مفعّلة، فسيُمسح من كل الأجهزة.':''))&&confirm('تأكيد أخير: لا يمكن التراجع')){logEv('مسح كل البيانات');db={students:[],att:{},ev:{},fu:[],users:db.users,asg:{},settings:db.settings};save();render()}break;
+    case 'wipe':if(confirm('مسح كل البيانات نهائيًا؟'+(SYNC&&SYNC.on?'\nتنبيه: المزامنة مفعّلة، فسيُمسح من كل الأجهزة.':''))&&confirm('تأكيد أخير: لا يمكن التراجع')){logEv('مسح كل البيانات');db={students:[],att:{},ev:{},fu:[],users:db.users,asg:{},nodup:{},settings:db.settings};save();render()}break;
   }
 });
 document.addEventListener('change',e=>{
@@ -1058,17 +975,13 @@ document.addEventListener('change',e=>{
 document.addEventListener('input',e=>{if(e.target.id==='bgOp'){BG.op=(+e.target.value)/100;document.documentElement.style.setProperty('--pgop',BG.op)}});
 
 /* ---------- المستخدمون والصلاحيات ---------- */
-const ROLES={admin:'مدير (أمين الخدمة)',fuLead:'مسؤول افتقاد',attLead:'مسؤول حضور',servant:'خادم',viewer:'مشاهد'};
+const ROLES={admin:'مدير',servant:'خادم',viewer:'مشاهد'};
 const ROLE_INFO={
-  admin:'كل الصلاحيات: المستخدمون والإعدادات والمزامنة والنسخ الاحتياطي والدمج والحذف وتوزيع الافتقاد.',
-  fuLead:'مسؤول عن الافتقاد: يوزّع الأسماء على الخدام، يتابع من لم يُفتقد، يرسل تذكير للخدام، ويرى كل الافتقاد والرسائل الجماعية والتقارير. لا يعدّل الإعدادات ولا يحذف.',
-  attLead:'مسؤول عن الحضور: يسجّل الحضور (يدويًا أو بالباركود أو بالصور)، يضيف الشباب ويعدّل بياناتهم وصورهم، ويطبع البطاقات والتقارير. بدون افتقاد أو إعدادات.',
-  servant:'يسجّل الحضور والتقييم، ويفتقد الأسماء الموزّعة عليه فقط، ويرسل رسائل، ويضيف ويعدّل الشباب، بدون حذف أو إعدادات أو تصدير قائمة التليفونات.',
+  admin:'كل الصلاحيات: المستخدمون والإعدادات والمزامنة والنسخ الاحتياطي والحذف.',
+  servant:'يسجّل الحضور والتقييم والافتقاد والرسائل ويضيف ويعدّل الشباب، بدون حذف أو إعدادات أو تصدير قائمة التليفونات.',
   viewer:'اطلاع فقط على الحضور والتقييم والتقارير، بدون أي تعديل وبدون أرقام التليفونات والعناوين.'};
 const PERM={
-  admin:['att','eval','fu','fuDel','msg','stu','stuDel','contact','rep','cfg','asg'],
-  fuLead:['fu','msg','contact','rep','asg'],
-  attLead:['att','eval','stu','rep'],
+  admin:['att','eval','fu','fuDel','msg','stu','stuDel','contact','rep','cfg'],
   servant:['att','eval','fu','msg','stu','contact','rep'],
   viewer:[]};
 const ACT_PERM={
@@ -1076,12 +989,12 @@ const ACT_PERM={
   allP:'att',clearAtt:'att',setAtt:'att',
   goFu:'fu',fuNew:'fu',fuSave:'fu',fuClose:'fu',fuDone:'fu',fuDel:'fuDel',
   gneed:'msg',gsel:'msg',gwho:'msg',gpreset:'msg',gwa:'msg',gnext:'msg',gsmsone:'msg',gsms:'msg',gsmslog:'msg',gsmsno:'msg',gcopym:'msg',gcopyn:'msg',greset:'msg',
-  csvSum:'rep',csvMat:'rep',cardOne:'rep',cardsAll:'rep',mRpt:'rep',asgForm:'asg',asgRemind:'asg',asgCopyRem:'asg',asgGo:'asg',asgFill:'asg',asgF:'asg',asgPrint:'asg',asgDone:'fu',
-  mergeG:'cfg',vcfAll:'contact',twinG:'stu',undoMerge:'cfg',scanOpen:'att',scanGo:'att',scanCam:'att',restA:'att',dateMgr:'cfg',dateMove:'cfg',dateDel:'cfg',bgClear:'cfg',bgDef:'cfg',saveSet:'cfg',exp:'cfg',csvStu:'cfg',sample:'cfg',wipe:'cfg',
+  csvSum:'rep',csvMat:'rep',cardOne:'rep',cardsAll:'rep',mRpt:'rep',asgForm:'cfg',asgRemind:'cfg',asgCopyRem:'cfg',asgGo:'cfg',asgFill:'cfg',asgF:'cfg',asgPrint:'cfg',asgDone:'fu',
+  mergeG:'stu',ignG:'stu',unIgn:'stu',dupMergeForm:'stu',dateMgr:'cfg',dateMove:'cfg',dateDel:'cfg',bgClear:'cfg',bgDef:'cfg',saveSet:'cfg',exp:'cfg',csvStu:'cfg',sample:'cfg',wipe:'cfg',
   syncRules:'cfg',syncGen:'cfg',syncConnect:'cfg',syncPaste:'cfg',syncCode:'cfg',syncOff:'cfg'};
 const DIS_ACT=new Set(['setAtt']);
 const TAB_PERM={msg:'msg'};
-const LOG_ACT={csvStu:'تصدير قائمة الشباب (CSV)',csvSum:'تصدير ملخص الشباب (CSV)',csvMat:'تصدير جدول الحضور (CSV)',vcfAll:'تصدير الأسماء لجهات الاتصال (VCF)'};
+const LOG_ACT={csvStu:'تصدير قائمة الشباب (CSV)',csvSum:'تصدير ملخص الشباب (CSV)',csvMat:'تصدير جدول الحضور (CSV)'};
 const ADM_ACT=new Set(['userAdd','userEdit','userSave','userDel','secOff','logClear']);
 const LBK='youthTracker.lastbk';
 const SESK='youthTracker.sess',FAILK='youthTracker.fail',LOGK='youthTracker.log',LUK='youthTracker.lastu';
@@ -1162,7 +1075,7 @@ async function doLogin(){
     $('#lgP').value='';lgErr('اسم المستخدم أو كلمة السر غير صحيحة'+(wait?' — انتظر '+wait+' ثانية قبل المحاولة التالية':''));return;
   }
   try{localStorage.removeItem(FAILK);localStorage.setItem(LUK,u.un)}catch(e){}
-  ME=u;lastAct=Date.now();sessSave();logEv('تسجيل دخول');setTimeout(fuNudge,1500);
+  ME=u;lastAct=Date.now();sessSave();logEv('تسجيل دخول');
   hideLock();applyTheme();render();toast('أهلًا '+u.name+' 👋');
 }
 
@@ -1186,12 +1099,12 @@ function applyRoleUI(){
 /* واجهة الإعدادات: الحماية والمستخدمون */
 const badgeRole=r=>`<span class="badge" style="background:var(--in);color:var(--pr2)">${ROLES[r]||esc(r)}</span>`;
 function vSet(){
-  if(!secOn())return secOffCard()+vSetAdmin();
-  return accountCard()+(can('cfg')?usersCard()+vSetAdmin()+logCard():'');
+  if(!secOn())return secOffCard()+vSetAdmin()+verCard();
+  return accountCard()+(can('cfg')?usersCard()+vSetAdmin()+logCard():'')+verCard();
 }
 function secOffCard(){
   return `<div class="card"><h2>🔐 الحماية والمستخدمون</h2>
-  <p class="muted" style="margin-top:0">النظام الآن مفتوح لأي شخص يفتحه على هذا الجهاز. فعّل الحماية ليصبح الدخول بحساب (اسم مستخدم + كلمة سر)، مع 5 أدوار: <b>مدير</b> و<b>مسؤول افتقاد</b> و<b>مسؤول حضور</b> و<b>خادم</b> و<b>مشاهد</b>، وقفل تلقائي عند عدم الاستخدام، وسجل للنشاط.</p>
+  <p class="muted" style="margin-top:0">النظام الآن مفتوح لأي شخص يفتحه على هذا الجهاز. فعّل الحماية ليصبح الدخول بحساب (اسم مستخدم + كلمة سر)، مع 3 مستويات: <b>مدير</b> و<b>خادم</b> و<b>مشاهد</b>، وقفل تلقائي عند عدم الاستخدام، وسجل للنشاط.</p>
   <button class="btn pri" data-act="secSetup">🔐 تفعيل الحماية وإنشاء حساب المدير</button></div>`;
 }
 function accountCard(){
@@ -1256,20 +1169,19 @@ function userForm(id){
   <div><label>الدور</label><select id="uR">${Object.keys(ROLES).map(r=>`<option value="${r}" ${(u.role||'servant')===r?'selected':''}>${ROLES[r]}</option>`).join('')}</select></div>
   <div><label>رقم الموبايل للتذكير (اختياري)</label><input id="uPh" dir="ltr" value="${esc(u.ph)}"></div>
   <div><label>${id?'كلمة سر جديدة (فاضية = بدون تغيير)':'كلمة السر * (4 أحرف أو أرقام فأكثر)'}</label><div class="row" style="flex-wrap:nowrap"><input id="uP" dir="ltr" autocomplete="off" style="flex:1"><button class="btn sm" data-act="pwGen" type="button">🎲 توليد</button></div></div></div>
-  <div class="f" style="margin-top:8px"><label>المراحل التي يخدمها (اتركها فاضية = كل المراحل — تُستخدم في توزيع الافتقاد)</label><div class="row">${GR.map(g=>`<label style="display:flex;gap:5px;align-items:center;color:var(--tx);margin:0"><input type="checkbox" class="uG" value="${g}" ${(u.grades||[]).includes(g)?'checked':''}> ${g}</label>`).join('')}</div></div>
   <div id="uRI" class="muted" style="margin:8px 0">${esc(ROLE_INFO[u.role||'servant'])}</div>
   ${id?`<label style="display:flex;gap:6px;align-items:center;color:var(--tx)"><input type="checkbox" id="uOn" ${u.on!==false?'checked':''}> الحساب فعّال</label>`:''}
   <div class="row" style="margin-top:12px"><button class="btn pri" id="uGo" data-act="userSave" data-id="${id||''}">حفظ</button><button class="btn" data-act="closeM">إلغاء</button></div>`);
 }
 async function userSave(id){
   if(!can('cfg'))return;
-  const grades=[...document.querySelectorAll('.uG:checked')].map(x=>x.value),name=$('#uN').value.trim(),un=$('#uU').value.trim(),role=$('#uR').value,pw=$('#uP').value,on=id?$('#uOn').checked:true,ph=$('#uPh')?$('#uPh').value.trim():'';
+  const name=$('#uN').value.trim(),un=$('#uU').value.trim(),role=$('#uR').value,pw=$('#uP').value,on=id?$('#uOn').checked:true,ph=$('#uPh')?$('#uPh').value.trim():'';
   if(!name||!un){toast('اكتب الاسم واسم المستخدم');return}
   if(!ROLES[role])return;
   if(db.users.some(x=>x.id!==id&&nu(x.un)===nu(un))){toast('اسم المستخدم مستخدم بالفعل');return}
   if((!id||pw)&&pw.length<4){toast('كلمة السر 4 أحرف أو أرقام على الأقل');return}
   const cur=id?db.users.find(x=>x.id===id):null;if(id&&!cur)return;
-  const rec=cur?Object.assign({},cur,{name,un,role,on,ph,grades}):{id:uid(),created:today(),name,un,role,on:true,ph,grades};
+  const rec=cur?Object.assign({},cur,{name,un,role,on,ph}):{id:uid(),created:today(),name,un,role,on:true,ph};
   const next=cur?db.users.map(x=>x.id===id?rec:x):db.users.concat([rec]);
   if(!adminsLeft(next)){toast('لازم يبقى مدير فعّال واحد على الأقل');return}
   $('#uGo').disabled=true;
@@ -1399,7 +1311,7 @@ function idCard(s){
   const ph=CARDS&&CARDS.ph&&can('contact')&&s.phone?`<div class="idm">📞 ${esc(s.phone)}</div>`:'';
   const pic=s.photo?`<img src="${s.photo}" alt="">`:`<span>${initial(s)}</span>`;
   const no=String(db.students.indexOf(s)+1).padStart(3,'0');
-  return `<div class="idc"><div class="idh">${esc(db.settings.cls)}</div><div class="idb"><div class="idp">${pic}</div><div class="idt"><div class="idn">${esc(s.name)}</div>${s.grade?`<div class="idg">${esc(s.grade)}</div>`:''}${ph}</div></div><div class="idf"><span>${code39svg(codeOf(s))}</span><span>رقم ${codeOf(s)}</span></div></div>`;
+  return `<div class="idc"><div class="idh">${esc(db.settings.cls)}</div><div class="idb"><div class="idp">${pic}</div><div class="idt"><div class="idn">${esc(s.name)}</div>${s.grade?`<div class="idg">${esc(s.grade)}</div>`:''}${ph}</div></div><div class="idf"><span>بطاقة عضوية</span><span>رقم ${no}</span></div></div>`;
 }
 function cardsRender(){
   const list=CARDS.ids.map(stu).filter(Boolean);let pages='';
@@ -1496,12 +1408,12 @@ const asgKeys=()=>Object.keys(db.asg||{}).sort();
 const asgOn=()=>asgKeys().length>0;
 const asgCur=()=>{const k=asgKeys();return k.length?k[k.length-1]:null};
 const asgWk=()=>(state.asgWs&&db.asg[state.asgWs])?state.asgWs:asgCur();
-const asgServants=()=>(db.users||[]).filter(u=>u.on!==false&&(u.role==='servant'||u.role==='admin'||u.role==='fuLead'));
+const asgServants=()=>(db.users||[]).filter(u=>u.on!==false&&(u.role==='servant'||u.role==='admin'));
 const uName=id=>{const u=(db.users||[]).find(x=>x.id===id);return u?u.name:''};
 const uActive=id=>!!(db.users||[]).find(x=>x.id===id&&x.on!==false);
 function asgOwner(sid,ws){ws=ws||asgCur();if(!ws)return '';const o=(db.asg[ws]||{})[sid];return o&&uActive(o)?o:''}
 /* هل هذا الاسم ضمن نطاق المستخدم الحالي في الافتقاد؟ (المدير يرى الكل، والخادم يرى أسماءه فقط بعد أول توزيع) */
-function myScope(sid){if(!secOn()||can('asg')||!asgOn())return true;return !!ME&&asgOwner(sid)===ME.id}
+function myScope(sid){if(!secOn()||can('cfg')||!asgOn())return true;return !!ME&&asgOwner(sid)===ME.id}
 function asgDrop(sid){Object.keys(db.asg||{}).forEach(ws=>{delete db.asg[ws][sid]})}
 function asgDoneRec(sid,ws){
   const nx=asgKeys().find(k=>k>ws);
@@ -1520,7 +1432,7 @@ function asgStat(ws){
 }
 
 function vFu(){
-  if(secOn()&&asgOn()&&!can('asg'))return vFuMine();
+  if(secOn()&&asgOn()&&!can('cfg'))return vFuMine();
   if(!secOn())return (asgOn()?'':`<div class="card"><b>👥 توزيع الافتقاد على الخدام</b><p class="muted" style="margin:6px 0 0">لتوزيع الأسماء على الخدام فعّل الحماية من الإعدادات وأنشئ حسابًا لكل خادم، فيرى كل خادم أسماءه فقط وتتابع أنت من لم يُفتقد.</p></div>`)+vFu0();
   return asgAdminCard()+vFuMine(true)+vFu0();
 }
@@ -1592,10 +1504,7 @@ function asgGo(){
   if(db.asg[ws]&&!confirm('يوجد توزيع بنفس التاريخ وسيتم استبداله. متابعة؟'))return;
   const k=rot?asgKeys().filter(x=>x<ws).length:0,n=uids.length,base=Math.floor(list.length/n),extra=list.length%n,map={_s:sc};
   let i=0;
-  const gm={};uids.forEach(u=>{const x=(db.users||[]).find(y=>y.id===u);gm[u]=(x&&x.grades)||[]});
-  if(uids.some(u=>gm[u].length)){const cnt={};uids.forEach(u=>cnt[u]=0);const ord=u=>((uids.indexOf(u)-k)%n+n)%n;
-    list.forEach(s=>{let c=uids.filter(u=>gm[u].includes(s.grade));if(!c.length)c=uids.filter(u=>!gm[u].length);if(!c.length)c=uids;c=c.slice().sort((a,b)=>cnt[a]-cnt[b]||ord(a)-ord(b));map[s.id]=c[0];cnt[c[0]]++})}
-  else for(let b=0;b<n;b++){const size=base+(b<extra?1:0),u=uids[(b+k)%n];for(let j=0;j<size;j++)map[list[i++].id]=u}
+  for(let b=0;b<n;b++){const size=base+(b<extra?1:0),u=uids[(b+k)%n];for(let j=0;j<size;j++)map[list[i++].id]=u}
   db.asg[ws]=map;state.asgWs=null;save();closeM();logEv('توزيع الافتقاد: '+list.length+' اسم على '+n+' خادم');render();toast('تم التوزيع ✓');
 }
 function asgFill(){
@@ -1628,7 +1537,7 @@ document.addEventListener('click',e=>{
   else if(a==='asgPrint')asgPrintOpen();
   else if(a==='asgDone'){
     if(!stu(id))return;
-    if(!can('asg')&&!(ME&&asgOwner(id)===ME.id)){toast('هذا الاسم غير موزّع عليك');return}
+    if(!can('cfg')&&!(ME&&asgOwner(id)===ME.id)){toast('هذا الاسم غير موزّع عليك');return}
     const m=$('#am-'+id),r=$('#ar-'+id),n=$('#an-'+id);
     recordFu(id,{date:today(),method:m?m.value:'اتصال',result:r?r.value.trim():'',note:'',next:n?n.value:''});
     save();render();toast('تم تسجيل الافتقاد ✓');
@@ -1638,7 +1547,7 @@ document.addEventListener('change',e=>{
   const t=e.target;
   if(t.id==='asgWk'){state.asgWs=t.value;render()}
   else if(t.dataset&&t.dataset.asgmv){
-    if(!can('asg'))return;const ws=asgCur();if(!ws)return;
+    if(!can('cfg'))return;const ws=asgCur();if(!ws)return;
     if(t.value)db.asg[ws][t.dataset.asgmv]=t.value;else delete db.asg[ws][t.dataset.asgmv];
     save();render();
   }
@@ -1650,7 +1559,7 @@ function myPending(){const ws=asgCur();if(!ws||!ME)return 0;return sorted().filt
 function myFuBanner(){
   if(!secOn()||!ME||!asgOn())return '';
   const n=myPending();if(!n)return '';
-  return `<div class="card" style="border-color:#e0a800"><b>📋 عليك ${n} اسم للافتقاد هذا الأسبوع</b><p class="muted" style="margin:6px 0">لم تفتقدهم بعد.</p><button class="btn sm pri" data-act="goFu">افتح قائمتي</button> ${('Notification' in window&&Notification.permission==='default')?'<button class="btn sm" data-act="notifOn">🔔 فعّل تنبيهات التذكير</button>':''}</div>`;
+  return `<div class="card" style="border-color:#e0a800"><b>📋 عليك ${n} اسم للافتقاد هذا الأسبوع</b><p class="muted" style="margin:6px 0">لم تفتقدهم بعد.</p><button class="btn sm pri" data-act="goFu">افتح قائمتي</button></div>`;
 }
 function fuHistory(){
   if(!ME)return '';
@@ -1667,15 +1576,7 @@ function vFuMine(sub){return vFuMine0(sub)+(sub?'':fuHistory())}
 function remMsg(u,list,total){
   const first=(u.name||'').split(' ')[0];
   const names=list.slice(0,15).map(s=>'• '+s.name).join('\n')+(list.length>15?'\n… و'+(list.length-15)+' آخرين':'');
-  return (db.settings.rmsg||DEF_RMSG).replace(/\{الاسم\}/g,first).replace(/\{العدد\}/g,list.length).replace(/\{الإجمالي\}/g,total||list.length).replace(/\{الأسماء\}/g,names);
-}
-function fuNudge(force){
-  if(!secOn()||!ME||!asgOn())return;const n=myPending();if(!n)return;
-  const k='youthTracker.nudge.'+ME.id,td=today();
-  if(!force){try{if(localStorage.getItem(k)===td)return}catch(e){}}
-  try{localStorage.setItem(k,td)}catch(e){}
-  const msg='عليك '+n+' اسم للافتقاد هذا الأسبوع';toast('📋 '+msg);
-  try{if('Notification' in window&&Notification.permission==='granted')new Notification('تذكير الافتقاد',{body:msg,icon:'icon-192.png'})}catch(e){}
+  return 'سلام ونعمة '+first+' 🙏\nباقي عليك '+list.length+(total?' من '+total:'')+' للافتقاد هذا الأسبوع:\n'+names+'\nربنا يعوّض تعبك ❤️';
 }
 function remRows(){
   const ws=asgCur();if(!ws)return [];const st=asgStat(ws);
@@ -1703,70 +1604,88 @@ document.addEventListener('click',e=>{
   }
 });
 
-/* ---------- حضور إلكتروني: رقم ثابت لكل شاب + باركود Code39 + ماسح ---------- */
-function hashStr(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
-const codeOf=s=>String(100000+hashStr(s.id)%900000);
-const byCode=c=>{c=digits(c);return db.students.find(s=>codeOf(s)===c)};
-const C39={'0':'nnnwwnwnn','1':'wnnwnnnnw','2':'nnwwnnnnw','3':'wnwwnnnnn','4':'nnnwwnnnw','5':'wnnwwnnnn','6':'nnwwwnnnn','7':'nnnwnnwnw','8':'wnnwnnwnn','9':'nnwwnnwnn','*':'nwnnwnwnn'};
-function code39svg(txt){
-  const s='*'+txt+'*';let x=0,bars='';
-  for(const ch of s){const p=C39[ch];if(!p)continue;for(let k=0;k<9;k++){const w=p[k]==='w'?3:1;if(k%2===0)bars+=`<rect x="${x}" y="0" width="${w}" height="10"/>`;x+=w}x+=1}
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${x} 10" preserveAspectRatio="none"><g fill="#000">${bars}</g></svg>`;
+/* ---------- تجاهل التكرار (التوائم): يُسأل مرة واحدة فقط ويتزامن مع كل الأجهزة ---------- */
+const pk=(a,b)=>a<b?a+'|'+b:b+'|'+a;
+const isNoDup=(a,b)=>!!(db.nodup&&db.nodup[pk(a,b)]);
+function setNoDup(a,b){if(!a||!b||a===b)return;db.nodup=db.nodup||{};db.nodup[pk(a,b)]=1}
+function nodupDrop(id){Object.keys(db.nodup||{}).forEach(k=>{if(k.split('|').includes(id))delete db.nodup[k]})}
+function ignList(){
+  const ks=Object.keys(db.nodup||{}).filter(k=>{const p=k.split('|');return stu(p[0])&&stu(p[1])});
+  if(!ks.length)return '';
+  return `<details style="margin-top:12px"><summary class="muted">الأزواج المتجاهلة (${ks.length})</summary>${ks.map(k=>{const p=k.split('|');return `<div class="row sp" style="margin-top:6px"><span>${esc(stu(p[0]).name)} ⟷ ${esc(stu(p[1]).name)}</span><button class="btn sm" data-act="unIgn" data-k="${k}">إلغاء التجاهل</button></div>`}).join('')}</details>`;
 }
-const SCN={log:[],stream:null,det:null,tm:0,last:'',lt:0};
-function beep(ok){try{const a=new (window.AudioContext||window.webkitAudioContext)(),o=a.createOscillator(),g=a.createGain();o.frequency.value=ok?880:220;g.gain.value=.08;o.connect(g);g.connect(a.destination);o.start();setTimeout(()=>{o.stop();a.close()},ok?120:300)}catch(e){}}
-function scanOpen(){
-  SCN.log=[];
-  openM(`<div class="row sp"><h2 style="margin:0">📷 تسجيل الحضور إلكترونيًا</h2><button class="btn sm" data-act="scanClose">✕</button></div>
-  <p class="muted">اجتماع ${fd(state.att)} — امسح باركود بطاقة الشاب (بالكاميرا أو بقارئ باركود USB/بلوتوث) أو اكتب رقم البطاقة. تُطبع البطاقات من «التقارير».</p>
-  <div class="row"><input id="scIn" dir="ltr" inputmode="numeric" placeholder="رقم البطاقة" style="flex:1" autocomplete="off"><button class="btn pri" data-act="scanGo">تسجيل</button></div>
-  <div class="row" style="margin:8px 0"><button class="btn" data-act="scanCam">📷 تشغيل الكاميرا</button></div>
-  <video id="scVid" playsinline muted style="display:none;width:100%;max-height:240px;border-radius:10px;background:#000"></video>
-  <div id="scRes" style="margin-top:8px"></div><div id="scLog" class="muted"></div>`);
-  setTimeout(()=>{const i=$('#scIn');i&&i.focus()},60);
-}
-function scanSubmit(raw){
-  const c=digits(raw);if(!c)return;const s=byCode(c),r=$('#scRes');if(!r)return;
-  if(!s){r.innerHTML=`<div class="card" style="background:var(--nob)">❌ لا يوجد شاب بالرقم ${esc(c)}</div>`;beep(false);return}
-  const d=state.att;db.att[d]=db.att[d]||{};const was=db.att[d][s.id]==='P';
-  if(!was){db.att[d][s.id]='P';autoSync(s.id,d,true);save()}
-  beep(true);
-  r.innerHTML=`<div class="card" style="background:${was?'var(--wab)':'var(--okb)'};text-align:center">${av(s,72)}<div style="font-size:20px;font-weight:bold">${esc(s.name)}</div><div>${was?'⚠ مسجّل حاضر من قبل':'✅ تم تسجيل الحضور'}</div></div>`;
-  if(!was)SCN.log.unshift(s.name);
-  const lg=$('#scLog');if(lg)lg.innerHTML=SCN.log.length?'سُجّل الآن ('+SCN.log.length+'): '+SCN.log.slice(0,12).map(esc).join('، '):'';
-  const i=$('#scIn');if(i){i.value='';i.focus()}
-}
-async function scanCam(){
-  if(!('BarcodeDetector' in window)){toast('هذا المتصفح لا يقرأ الباركود بالكاميرا — اكتب الرقم أو استخدم قارئ باركود (أو افتح من Chrome على أندرويد)');return}
-  if(SCN.stream)return;
-  try{
-    SCN.det=new BarcodeDetector({formats:['code_39']});
-    SCN.stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
-    const v=$('#scVid');v.srcObject=SCN.stream;v.style.display='block';await v.play();
-    const loop=async()=>{if(!SCN.stream)return;try{const b=await SCN.det.detect(v);if(b.length){const val=b[0].rawValue,now=Date.now();if(val!==SCN.last||now-SCN.lt>3000){SCN.last=val;SCN.lt=now;scanSubmit(val)}}}catch(e){}SCN.tm=setTimeout(loop,250)};loop();
-  }catch(e){SCN.stream=null;toast('تعذر تشغيل الكاميرا — اسمح للمتصفح باستخدامها')}
-}
-function scanStop(){clearTimeout(SCN.tm);if(SCN.stream){SCN.stream.getTracks().forEach(x=>x.stop());SCN.stream=null}}
-const _closeM=closeM;closeM=function(){scanStop();return _closeM.apply(this,arguments)};
-document.addEventListener('keydown',e=>{if(e.target&&e.target.id==='scIn'&&e.key==='Enter'){e.preventDefault();if(secOn()&&!can('att'))return;scanSubmit(e.target.value)}});
 document.addEventListener('click',e=>{
-  const t=e.target.closest('[data-act]');if(!t)return;const a=t.dataset.act;
-  if(!['scanOpen','scanGo','scanCam','scanClose','attView','restA','notifOn','vcfAll'].includes(a))return;
+  const t=e.target.closest('[data-act]');if(!t)return;
+  const a=t.dataset.act;
+  if(a!=='ignG'&&a!=='unIgn'&&a!=='dupMergeForm')return;
   if(secOn()&&!ME)return;
-  if(ACT_PERM[a]&&!can(ACT_PERM[a]))return;
-  if(a==='vcfAll'){if(LOG_ACT[a])logEv(LOG_ACT[a]);vcfExport();return}
-  if(a==='scanOpen')scanOpen();
-  else if(a==='scanGo'){const i=$('#scIn');if(i)scanSubmit(i.value)}
-  else if(a==='scanCam')scanCam();
-  else if(a==='scanClose'){closeM();render()}
-  else if(a==='attView'){state.attView=t.dataset.v;render()}
-  else if(a==='restA'){const d=state.att;db.att[d]=db.att[d]||{};if(!confirm('تسجيل كل من لم يُسجَّل حضوره غائبًا؟'))return;fsorted().forEach(s=>{if(!db.att[d][s.id]){db.att[d][s.id]='A';autoSync(s.id,d,true)}});save();render()}
-  else if(a==='notifOn'){try{Notification.requestPermission().then(p=>{toast(p==='granted'?'تم تفعيل التنبيهات ✓':'لم يتم السماح بالتنبيهات');render()})}catch(x){}}
+  if(!can('stu')){toast('🔒 ليس لديك صلاحية لهذا الإجراء');return}
+  if(a==='ignG'){
+    const g=DG[+t.dataset.g];if(!g)return;
+    for(let i=0;i<g.length;i++)for(let j=i+1;j<g.length;j++)setNoDup(g[i].id,g[j].id);
+    logEv('تجاهل تكرار (أشخاص مختلفون): '+g.map(s=>s.name).join('، '));
+    save();render();dupReview();toast('تم التجاهل — لن يُسأل عنهم مرة أخرى ✓');
+  }
+  else if(a==='unIgn'){if(db.nodup)delete db.nodup[t.dataset.k];save();render();dupReview()}
+  else{
+    const did=t.dataset.id,d=stu(did),fs=$('#fSave');if(!d||!fs)return;
+    const tid=fs.dataset.id,name=$('#fN').value.trim();if(!name){toast('اكتب الاسم');return}
+    const o={photo:FPH,name,phone:$('#fP').value.trim(),parentPhone:$('#fPP').value.trim(),birth:$('#fB').value,address:$('#fA').value.trim(),notes:$('#fT').value.trim(),grade:$('#fG').value};
+    if(tid&&stu(tid)){
+      if(!confirm('دمج ('+name+') في ('+d.name+')؟ لا يمكن التراجع.'))return;
+      Object.assign(stu(tid),o);logEv('دمج سجلات مكررة: '+name+' ← '+d.name);mergeInto(did,tid);
+    }else{
+      if(!confirm('لن يُضاف شاب جديد، وسيتم إكمال بيانات ('+d.name+') الناقصة بما كتبته. متابعة؟'))return;
+      ['phone','parentPhone','address','birth','grade','photo'].forEach(k=>{if(!d[k]&&o[k])d[k]=o[k]});
+      if(o.notes&&!(d.notes||'').includes(o.notes))d.notes=[d.notes,o.notes].filter(Boolean).join(' | ');
+      logEv('دمج إدخال مكرر في: '+d.name);
+    }
+    save();closeM();render();toast('تم الدمج ✓');
+  }
 });
-setInterval(()=>fuNudge(),600000);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)setTimeout(fuNudge,800)});
+
+/* ---------- إصدار النظام والتحديث بضغطة ---------- */
+const APP_VER='2.0.0',APP_DATE='2026-11-27';
+let UPD=null,_uc=0;
+async function updCheck(manual){
+  if(!/^https?:$/.test(location.protocol)){if(manual)toast('الفحص يعمل من رابط الموقع فقط');return false}
+  try{
+    const r=await fetch(location.origin+location.pathname,{cache:'no-store'});
+    if(!r.ok)throw 0;
+    const m=(await r.text()).match(/const APP_VER='([^']+)'/);
+    if(m&&m[1]!==APP_VER){UPD=m[1];updBar();return true}
+    if(manual)toast('أنت على أحدث إصدار ✓ ('+APP_VER+')');
+  }catch(e){if(manual)toast('تعذر الفحص — تأكد من الاتصال بالإنترنت')}
+  return false;
+}
+function updBar(){
+  if($('#updBar'))return;
+  const b=document.createElement('div');b.id='updBar';
+  b.innerHTML='<span>🔄 يوجد إصدار جديد من النظام</span><button class="btn sm pri" id="updGo">تحديث الآن</button><button class="btn sm" id="updLater">لاحقًا</button>';
+  document.body.appendChild(b);
+  $('#updGo').onclick=updApply;$('#updLater').onclick=()=>b.remove();
+}
+async function updApply(){
+  const g=$('#updGo');if(g){g.disabled=true;g.textContent='جارٍ التحديث…'}
+  try{await fetch(location.origin+location.pathname,{cache:'reload'})}catch(e){}
+  try{if(window.caches){const k=await caches.keys();await Promise.all(k.map(x=>caches.delete(x)))}}catch(e){}
+  try{if(navigator.serviceWorker){const rs=await navigator.serviceWorker.getRegistrations();await Promise.all(rs.map(r=>r.update()))}}catch(e){}
+  location.reload();
+}
+function updAuto(){const n=Date.now();if(n-_uc<60000)return;_uc=n;updCheck(false)}
+setTimeout(updAuto,4000);setInterval(updAuto,15*60000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)updAuto()});
+function verCard(){
+  return `<div class="card"><h2 style="margin-top:0">ℹ️ إصدار النظام</h2><p class="muted" style="margin:0 0 8px">الإصدار <b>${APP_VER}</b> • ${APP_DATE}</p><button class="btn" data-act="chkUpd">🔄 البحث عن تحديث</button></div>`;
+}
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-act]');if(!t||t.dataset.act!=='chkUpd')return;
+  if(UPD){updBar();return}
+  updCheck(true);
+});
+
 applyBG();
-authInit();syncAuto();applyTheme();render();syncInit();setTimeout(fuNudge,2500);
+authInit();syncAuto();applyTheme();render();syncInit();
 {const t=(!secOn()||ME)?upBd().filter(x=>x.b.days===0):[];if(t.length)setTimeout(()=>toast('🎂 النهاردة عيد ميلاد '+t.map(x=>x.s.name.split(' ')[0]).join(' و ')),700)}
 if('serviceWorker' in navigator&&location.protocol==='https:')window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
 </script>
