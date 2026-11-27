@@ -282,6 +282,7 @@ function render(){
   $('#main').innerHTML=v();
   if(state.tab==='msg')gPrev();
   applyRoleUI();
+  if($('#devBox'))devRefresh();
 }
 
 /* ---------- cloud sync (Firebase Realtime Database, end-to-end encrypted) ---------- */
@@ -341,7 +342,7 @@ function applyFlat(mf){
 function setStat(s,m){
   sStat={s,m:m||''};const c=$('#syncChip');if(!c)return;
   const tm=new Date();const hm=String(tm.getHours()).padStart(2,'0')+':'+String(tm.getMinutes()).padStart(2,'0');
-  c.textContent={off:'☁ المزامنة: غير مفعّلة',busy:'☁ جارٍ المزامنة…',ok:'☁ متزامن ✓ '+hm,idle:'☁ المزامنة مفعّلة',offline:'☁ غير متصل',err:'☁ ⚠ خطأ في المزامنة'}[s]||'☁';
+  c.textContent={off:'☁ المزامنة: غير مفعّلة',busy:'☁ جارٍ المزامنة…',ok:'☁ متزامن ✓ '+hm+((typeof DEVS!=='undefined'&&DEVS.length>1)?' • '+DEVS.length+' أجهزة':''),idle:'☁ المزامنة مفعّلة',offline:'☁ غير متصل',err:'☁ ⚠ خطأ في المزامنة'}[s]||'☁';
   c.title=m||'';
 }
 function syncErr(e){
@@ -375,7 +376,7 @@ async function syncNow(){
       if(mf[k]!==rf[k]){patch['k/'+await hk(k)]=mf[k]===undefined?null:await encO({k,v:mf[k]});n++}}
     const seen=pull?Object.assign({},hd):Object.assign({},SYNC.seen||{});
     if(n){const tok=Date.now()+'-'+Math.random().toString(36).slice(2,6);patch['heads/'+SYNC.dev]=tok;await fb('','PATCH',patch);seen[SYNC.dev]=tok}
-    localStorage.setItem(BK,JSON.stringify(mf));SYNC.seen=seen;saveSync();setStat('ok');ok=true;
+    localStorage.setItem(BK,JSON.stringify(mf));SYNC.seen=seen;saveSync();setStat('ok');ok=true;devBeat();devRefresh(false,60000);
   }catch(e){setStat('err',syncErr(e))}
   finally{sBusy=false;if(sAgain){sAgain=false;setTimeout(syncNow,800)}}
   return ok;
@@ -398,7 +399,8 @@ function syncCard(){
   const RULES='{"rules":{".read":false,".write":false,"youth":{"$room":{".read":true,".write":true}}}}';
   return `<div class="card"><h2>☁ المزامنة بين الأجهزة</h2>
   ${on?`<p>✅ المزامنة <b>مفعّلة</b>: أي تعديل يظهر على باقي الأجهزة خلال ثوانٍ. ${sStat.s==='err'?`<span class="badge r">${esc(sStat.m)}</span>`:''}</p>
-  <div class="row"><button class="btn pri" data-act="syncNow">🔄 مزامنة الآن</button><button class="btn" data-act="syncCode">🔗 رمز الربط لجهاز آخر</button><button class="btn dng" data-act="syncOff">إيقاف المزامنة</button></div><div id="syncCodeBox" style="margin-top:10px"></div>`
+  <div class="row"><button class="btn pri" data-act="syncNow">🔄 مزامنة الآن</button><button class="btn" data-act="syncCode">🔗 رمز الربط لجهاز آخر</button><button class="btn dng" data-act="syncOff">إيقاف المزامنة</button></div><div id="syncCodeBox" style="margin-top:10px"></div>
+  <h3 style="margin:16px 0 6px">📱 الأجهزة المتصلة الآن</h3><div id="devBox"><div class="muted">جارٍ التحميل…</div></div>`
   :`<p class="muted" style="margin-top:0">لتستخدم النظام من أكثر من جهاز (موبايل + كمبيوتر + خادم آخر) بنفس البيانات. تحتاج تجهيزًا لمرة واحدة بحساب جوجل (مجاني).</p>
   <details><summary><b>① خطوات التجهيز</b></summary><ol class="muted" style="line-height:2">
   <li>ادخل <b>console.firebase.google.com</b> واضغط <b>Create a project</b> (اسم أي شيء، وعطّل Google Analytics).</li>
@@ -472,7 +474,8 @@ function mergeInto(pid,oid){
 function dupReview(){
   DG=dupGroups();
   openM(`<div class="row sp"><h2 style="margin:0">🔍 مراجعة التكرار</h2><button class="btn sm" data-act="closeM">✕</button></div>
-  ${DG.length?`<p class="muted">اختر السجل الأساسي في كل مجموعة ثم اضغط دمج: يُنقل الحضور والتقييم والافتقاد للسجل الأساسي، وتُكمَّل بياناته الناقصة، ويُحذف المكرر. أما إن كانوا توائم أو إخوة بنفس الرقم والعنوان فاضغط «تجاهل» ولن يُسأل عنهم مرة أخرى.</p>`+DG.map((g,gi)=>{const best=g.map(s=>recCount(s.id)).reduce((b,v,i,a)=>v>a[b]?i:b,0);return `<div class="card" style="margin-top:10px"><div class="muted">مجموعة ${gi+1}</div>${g.map((s,i)=>`<label style="display:flex;gap:8px;align-items:center;color:var(--tx);padding:5px 0;font-size:15px"><input type="radio" name="dg${gi}" value="${s.id}" ${i===best?'checked':''}> <b>${esc(s.name)}</b> ${grBadge(s)} <span class="muted">${esc(s.phone||'بدون رقم')} • ${recCount(s.id)} سجل</span></label>`).join('')}<button class="btn pri sm" data-act="mergeG" data-g="${gi}">🔗 دمج المجموعة</button> <button class="btn sm" data-act="ignG" data-g="${gi}">تجاهل — أشخاص مختلفون (توأم)</button></div>`}).join(''):'<div class="empty">لا يوجد تكرار ✓</div>'}${ignList()}`);
+  ${DG.length?`<p class="muted">اختر السجل الأساسي في كل مجموعة، ولكل اسم آخر اختر: «دمج في الأساسي» (يُنقل حضوره وتقييمه وافتقاده للأساسي ويُحذف المكرر) أو «شخص مختلف (توأم)» (يبقى منفصلًا ولا يُسأل عنه مرة أخرى). ثم اضغط «تنفيذ الاختيارات». وإن كانت المجموعة كلها توائم فاضغط «كلهم أشخاص مختلفون».</p>`+DG.map((g,gi)=>{const best=g.map(s=>recCount(s.id)).reduce((b,v,i,a)=>v>a[b]?i:b,0);return `<div class="card" style="margin-top:10px"><div class="muted">مجموعة ${gi+1}</div>${g.map((s,i)=>`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:5px 0"><label style="display:flex;gap:8px;align-items:center;color:var(--tx);font-size:15px;flex:1;min-width:200px"><input type="radio" name="dg${gi}" value="${s.id}" ${i===best?'checked':''}> <b>${esc(s.name)}</b> ${grBadge(s)} <span class="muted">${esc(s.phone||'بدون رقم')} • ${recCount(s.id)} سجل</span></label><select data-dgs="${gi}|${s.id}"><option value="merge">دمج في الأساسي</option><option value="diff" ${(i!==best&&!dupWhy(nName(g[best].name),'',s))?'selected':''}>شخص مختلف (توأم)</option></select></div>`).join('')}<button class="btn pri sm" data-act="mergeG" data-g="${gi}">✔ تنفيذ الاختيارات</button> <button class="btn sm" data-act="ignG" data-g="${gi}">👥 كلهم أشخاص مختلفون (توائم)</button></div>`}).join(''):'<div class="empty">لا يوجد تكرار ✓</div>'}${ignList()}`);
+  DG.forEach((g,gi)=>dgSync(gi));
 }
 
 /* ---------- grade + birthday ---------- */
@@ -779,12 +782,17 @@ document.addEventListener('click',e=>{
     case 'syncConnect':connectSync($('#syUrl').value,$('#syRoom').value.trim(),$('#syPass').value);break;
     case 'syncPaste':{try{const c=$('#syCode').value.trim();if(!c.startsWith('YT1.'))throw 0;const o=JSON.parse(decodeURIComponent(escape(atob(c.slice(4)))));connectSync(o.u,o.r,o.p)}catch(x){toast('رمز الربط غير صحيح')}break}
     case 'syncCode':{const b=$('#syncCodeBox');b.innerHTML='<div class="muted">انسخ الرمز والصقه في «بيانات الربط ③» على الجهاز الآخر (سري، يحتوي كلمة السر):</div><textarea readonly dir="ltr" style="min-height:70px">'+esc(syncCodeOf())+'</textarea><button class="btn sm" id="cpCode">📋 نسخ</button>';$('#cpCode').onclick=()=>copyT(syncCodeOf());break}
-    case 'syncOff':if(confirm('إيقاف المزامنة على هذا الجهاز؟ ستبقى بياناته محفوظة عليه ولن تتزامن.')){SYNC=null;sKey=null;saveSync();localStorage.removeItem(BK);setStat('off');render()}break;
+    case 'syncOff':if(confirm('إيقاف المزامنة على هذا الجهاز؟ ستبقى بياناته محفوظة عليه ولن تتزامن.')){try{fb('/dev/'+SYNC.dev,'DELETE').catch(()=>{})}catch(x){}DEVS=[];SYNC=null;sKey=null;saveSync();localStorage.removeItem(BK);setStat('off');render()}break;
     case 'dupRev':dupReview();break;
     case 'mergeG':{const g=DG[+t.dataset.g];if(!g)break;const r=document.querySelector('input[name=dg'+t.dataset.g+']:checked');if(!r)break;
-      const keep=r.value,names=g.filter(s=>s.id!==keep).map(s=>s.name).join('، ');
-      if(!confirm('دمج ('+names+') في السجل الأساسي؟ لا يمكن التراجع.'))break;
-      g.forEach(s=>{if(s.id!==keep)mergeInto(keep,s.id)});logEv('دمج سجلات مكررة: '+names);save();render();dupReview();toast('تم الدمج ✓');break}
+      const keep=r.value,gi=t.dataset.g,mg=[],df=[];
+      g.forEach(s=>{if(s.id===keep)return;const sl=document.querySelector('select[data-dgs="'+gi+'|'+s.id+'"]');(sl&&sl.value==='diff'?df:mg).push(s)});
+      const names=mg.map(s=>s.name).join('، ');
+      if(mg.length&&!confirm('دمج ('+names+') في السجل الأساسي؟ لا يمكن التراجع.'))break;
+      mg.forEach(s=>mergeInto(keep,s.id));
+      const sep=[keep].concat(df.map(s=>s.id));for(let i=0;i<sep.length;i++)for(let j=i+1;j<sep.length;j++)setNoDup(sep[i],sep[j]);
+      if(mg.length)logEv('دمج سجلات مكررة: '+names);if(df.length)logEv('تجاهل تكرار (أشخاص مختلفون): '+df.map(s=>s.name).join('، '));
+      save();render();dupReview();toast(mg.length&&df.length?'تم الدمج وتسجيل الأشخاص المختلفين ✓':mg.length?'تم الدمج ✓':'تم — لن يُسأل عنهم مرة أخرى ✓');break}
     case 'gneed':{G.sel={};db.students.forEach(s=>{if(stats(s.id).need&&myScope(s.id))G.sel[s.id]=1});G.text=null;G.track=true;G.sent={};G.smsPending=false;state.tab='msg';render();window.scrollTo(0,0);break}
     case 'gsel':{const v=t.dataset.v;G.sel={};db.students.forEach(s=>{if(v==='all'||(v==='absent'&&stats(s.id).last==='A')||(v==='need'&&stats(s.id).need&&myScope(s.id))||(v.startsWith('g:')&&s.grade===v.slice(2)))G.sel[s.id]=1});render();break}
     case 'gwho':G.who=t.dataset.v;render();break;
@@ -989,8 +997,8 @@ const ACT_PERM={
   allP:'att',clearAtt:'att',setAtt:'att',
   goFu:'fu',fuNew:'fu',fuSave:'fu',fuClose:'fu',fuDone:'fu',fuDel:'fuDel',
   gneed:'msg',gsel:'msg',gwho:'msg',gpreset:'msg',gwa:'msg',gnext:'msg',gsmsone:'msg',gsms:'msg',gsmslog:'msg',gsmsno:'msg',gcopym:'msg',gcopyn:'msg',greset:'msg',
-  csvSum:'rep',csvMat:'rep',cardOne:'rep',cardsAll:'rep',mRpt:'rep',asgForm:'cfg',asgRemind:'cfg',asgCopyRem:'cfg',asgGo:'cfg',asgFill:'cfg',asgF:'cfg',asgPrint:'cfg',asgDone:'fu',
-  mergeG:'stu',ignG:'stu',unIgn:'stu',dupMergeForm:'stu',dateMgr:'cfg',dateMove:'cfg',dateDel:'cfg',bgClear:'cfg',bgDef:'cfg',saveSet:'cfg',exp:'cfg',csvStu:'cfg',sample:'cfg',wipe:'cfg',
+  csvSum:'rep',csvMat:'rep',cardOne:'rep',cardsAll:'rep',mRpt:'rep',asgForm:'cfg',devRename:'cfg',asgRemind:'cfg',asgCopyRem:'cfg',asgGo:'cfg',asgFill:'cfg',asgF:'cfg',asgPrint:'cfg',asgDone:'fu',
+  mergeG:'stu',ignG:'stu',unIgn:'stu',unIgnAll:'stu',dupMergeForm:'stu',dateMgr:'cfg',dateMove:'cfg',dateDel:'cfg',bgClear:'cfg',bgDef:'cfg',saveSet:'cfg',exp:'cfg',csvStu:'cfg',sample:'cfg',wipe:'cfg',
   syncRules:'cfg',syncGen:'cfg',syncConnect:'cfg',syncPaste:'cfg',syncCode:'cfg',syncOff:'cfg'};
 const DIS_ACT=new Set(['setAtt']);
 const TAB_PERM={msg:'msg'};
@@ -1033,7 +1041,7 @@ function authSync(){
 function autoLock(){
   if(ME&&lockMs()&&Date.now()-lastAct>lockMs()){logEv('قفل تلقائي لعدم النشاط');lockMsg='🔒 تم القفل تلقائيًا لعدم النشاط';ME=null;sessClear();render()}
 }
-function logout(){logEv('تسجيل خروج');ME=null;sessClear();lockMsg='';render()}
+function logout(){logEv('تسجيل خروج');ME=null;sessClear();lockMsg='';render();devBeat(true)}
 function actPing(){lastAct=Date.now();if(lastAct-_sp>5000){_sp=lastAct;sessSave()}}
 ['click','keydown','touchstart','scroll','mousemove'].forEach(ev=>document.addEventListener(ev,actPing,{passive:true,capture:true}));
 setInterval(autoLock,10000);
@@ -1075,7 +1083,7 @@ async function doLogin(){
     $('#lgP').value='';lgErr('اسم المستخدم أو كلمة السر غير صحيحة'+(wait?' — انتظر '+wait+' ثانية قبل المحاولة التالية':''));return;
   }
   try{localStorage.removeItem(FAILK);localStorage.setItem(LUK,u.un)}catch(e){}
-  ME=u;lastAct=Date.now();sessSave();logEv('تسجيل دخول');
+  ME=u;lastAct=Date.now();sessSave();logEv('تسجيل دخول');devBeat(true);
   hideLock();applyTheme();render();toast('أهلًا '+u.name+' 👋');
 }
 
@@ -1402,6 +1410,8 @@ document.addEventListener('click',e=>{
 });
 document.addEventListener('change',e=>{if(e.target.id==='idPh'&&CARDS){CARDS.ph=e.target.checked;cardsRender()}});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closePrt()});
+function dgSync(gi){document.querySelectorAll('select[data-dgs^="'+gi+'|"]').forEach(sl=>{const r=document.querySelector('input[name=dg'+gi+']:checked');sl.disabled=!!r&&sl.dataset.dgs.split('|')[1]===r.value})}
+document.addEventListener('change',e=>{const t=e.target;if(t.type==='radio'&&/^dg\d+$/.test(t.name||''))dgSync(t.name.slice(2))});
 
 /* ---------- توزيع الافتقاد على الخدام ---------- */
 const asgKeys=()=>Object.keys(db.asg||{}).sort();
@@ -1612,12 +1622,12 @@ function nodupDrop(id){Object.keys(db.nodup||{}).forEach(k=>{if(k.split('|').inc
 function ignList(){
   const ks=Object.keys(db.nodup||{}).filter(k=>{const p=k.split('|');return stu(p[0])&&stu(p[1])});
   if(!ks.length)return '';
-  return `<details style="margin-top:12px"><summary class="muted">الأزواج المتجاهلة (${ks.length})</summary>${ks.map(k=>{const p=k.split('|');return `<div class="row sp" style="margin-top:6px"><span>${esc(stu(p[0]).name)} ⟷ ${esc(stu(p[1]).name)}</span><button class="btn sm" data-act="unIgn" data-k="${k}">إلغاء التجاهل</button></div>`}).join('')}</details>`;
+  return `<details style="margin-top:12px"><summary class="muted">الأزواج المتجاهلة (${ks.length})</summary>${ks.map(k=>{const p=k.split('|');return `<div class="row sp" style="margin-top:6px"><span>${esc(stu(p[0]).name)} ⟷ ${esc(stu(p[1]).name)}</span><button class="btn sm" data-act="unIgn" data-k="${k}">إلغاء التجاهل</button></div>`}).join('')}<div class="row" style="margin-top:8px"><button class="btn sm dng" data-act="unIgnAll">إلغاء كل الاستثناءات</button></div></details>`;
 }
 document.addEventListener('click',e=>{
   const t=e.target.closest('[data-act]');if(!t)return;
   const a=t.dataset.act;
-  if(a!=='ignG'&&a!=='unIgn'&&a!=='dupMergeForm')return;
+  if(a!=='ignG'&&a!=='unIgn'&&a!=='unIgnAll'&&a!=='dupMergeForm')return;
   if(secOn()&&!ME)return;
   if(!can('stu')){toast('🔒 ليس لديك صلاحية لهذا الإجراء');return}
   if(a==='ignG'){
@@ -1627,6 +1637,7 @@ document.addEventListener('click',e=>{
     save();render();dupReview();toast('تم التجاهل — لن يُسأل عنهم مرة أخرى ✓');
   }
   else if(a==='unIgn'){if(db.nodup)delete db.nodup[t.dataset.k];save();render();dupReview()}
+  else if(a==='unIgnAll'){if(!confirm('إلغاء كل الاستثناءات؟ سيعود التنبيه للأسماء التي تجاهلتها.'))return;db.nodup={};logEv('إلغاء كل استثناءات التكرار');save();render();dupReview();toast('تم إلغاء الاستثناءات')}
   else{
     const did=t.dataset.id,d=stu(did),fs=$('#fSave');if(!d||!fs)return;
     const tid=fs.dataset.id,name=$('#fN').value.trim();if(!name){toast('اكتب الاسم');return}
@@ -1645,7 +1656,7 @@ document.addEventListener('click',e=>{
 });
 
 /* ---------- إصدار النظام والتحديث بضغطة ---------- */
-const APP_VER='2.0.0',APP_DATE='2026-11-27';
+const APP_VER='2.1.0',APP_DATE='2026-11-27';
 let UPD=null,_uc=0;
 async function updCheck(manual){
   if(!/^https?:$/.test(location.protocol)){if(manual)toast('الفحص يعمل من رابط الموقع فقط');return false}
@@ -1682,6 +1693,53 @@ document.addEventListener('click',e=>{
   const t=e.target.closest('[data-act]');if(!t||t.dataset.act!=='chkUpd')return;
   if(UPD){updBar();return}
   updCheck(true);
+});
+
+/* ---------- الأجهزة المتصلة بالمزامنة (مشفّرة بنفس كلمة سر الغرفة) ---------- */
+var DEVS=[];let _dfetch=0,_dbeat=0;
+function devLabel(){
+  const ua=navigator.userAgent||'';
+  const os=/Android/i.test(ua)?'أندرويد':/iPhone|iPad|iPod/i.test(ua)?'آيفون / آيباد':/Windows/i.test(ua)?'ويندوز':/Mac OS X|Macintosh/i.test(ua)?'ماك':/Linux/i.test(ua)?'لينكس':'جهاز';
+  const br=/Edg\//i.test(ua)?'Edge':/OPR\//i.test(ua)?'Opera':/Firefox|FxiOS/i.test(ua)?'Firefox':/Chrome|CriOS/i.test(ua)?'Chrome':/Safari/i.test(ua)?'Safari':'متصفح';
+  return os+' • '+br;
+}
+const devName=()=>(SYNC&&SYNC.dn)||devLabel();
+async function devBeat(force){
+  if(!SYNC||!SYNC.on||!navigator.onLine)return;
+  if(!force&&document.hidden)return;
+  const n=Date.now();if(!force&&n-_dbeat<30000)return;_dbeat=n;
+  try{
+    if(!sKey)sKey=await mkKey(SYNC.pass,SYNC.room);
+    await fb('/dev/'+SYNC.dev,'PUT',await encO({n:devName(),u:ME?ME.name:'',t:Date.now(),v:APP_VER}));
+  }catch(e){}
+}
+async function devRefresh(force,min){
+  if(!SYNC||!SYNC.on||!navigator.onLine)return;
+  const n=Date.now();if(!force&&n-_dfetch<(min||10000)){devDraw();return}_dfetch=n;
+  try{
+    if(!sKey)sKey=await mkKey(SYNC.pass,SYNC.room);
+    const raw=(await fb('/dev'))||{},out=[];
+    for(const id in raw){try{const o=await decO(raw[id]);if(Date.now()-o.t<30*864e5)out.push(Object.assign({id},o))}catch(e){}}
+    out.sort((a,b)=>b.t-a.t);DEVS=out;
+  }catch(e){}
+  devDraw();if(sStat&&sStat.s==='ok')setStat('ok');
+}
+function devDraw(){
+  const b=$('#devBox');if(!b)return;
+  const now=Date.now(),ago=t=>{const m=Math.floor((now-t)/60000);return m<1?'قبل لحظات':m<60?'منذ '+m+' دقيقة':m<1440?'منذ '+Math.floor(m/60)+' ساعة':'منذ '+Math.floor(m/1440)+' يوم'};
+  b.innerHTML=DEVS.length?`<div class="tw"><table><tr><th>الجهاز</th><th>المستخدم</th><th>الحالة</th><th>الإصدار</th></tr>${DEVS.map(d=>{
+    const on=now-d.t<75000,me=!!(SYNC&&d.id===SYNC.dev);
+    return `<tr><td>${esc(d.n)}${me?' <span class="badge g">هذا الجهاز</span> <button class="btn sm" data-act="devRename" title="تسمية الجهاز">✏</button>':''}</td><td>${esc(d.u||'—')}</td><td>${on?'🟢 متصل الآن':'⚪ آخر ظهور '+ago(d.t)}</td><td>${esc(d.v||'—')}</td></tr>`}).join('')}</table></div><p class="muted" style="font-size:12px;margin:6px 0 0">الجهاز يُعتبر «متصل الآن» لو أرسل إشارة خلال آخر دقيقة وربع وهو مفتوح. الجهاز الذي لم يُحدَّث للنسخة الجديدة لا يظهر هنا.</p>`:'<div class="muted">لا توجد بيانات بعد… (تظهر الأجهزة بعد أن تفتح النسخة الجديدة عليها)</div>';
+}
+setInterval(()=>devBeat(false),60000);
+setInterval(()=>{if($('#devBox'))devRefresh(false,10000)},30000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){devBeat(true);devRefresh(false,20000)}});
+document.addEventListener('click',async e=>{
+  const t=e.target.closest('[data-act]');if(!t||t.dataset.act!=='devRename')return;
+  if(!can('cfg')||!SYNC)return;
+  const v=prompt('اسم هذا الجهاز (مثلًا: موبايل الخادم أ):',devName());if(v===null)return;
+  const nm=v.trim().slice(0,40);if(nm)SYNC.dn=nm;else delete SYNC.dn;saveSync();
+  await devBeat(true);devRefresh(true);
 });
 
 applyBG();
