@@ -156,6 +156,21 @@ body.locked header,body.locked nav,body.locked main{display:none}
 #updBar{position:fixed;left:10px;right:10px;bottom:10px;z-index:9000;background:var(--card);color:var(--tx);border:2px solid var(--pr2);border-radius:12px;padding:10px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;box-shadow:0 6px 24px rgba(0,0,0,.25)}
 #updBar span{flex:1;min-width:150px;font-weight:700}
 @media print{#updBar{display:none!important}}
+.asbar.r i{background:#c0392b}.asbar.b i{background:#2b6cb0}
+.kbox{flex:1;min-width:140px;border:1px solid var(--bd);border-radius:10px;padding:8px 10px;background:var(--card)}
+.asr.ka{border-right:4px solid #c0392b;padding-right:8px}
+.card.ka{border-right:5px solid #c0392b}
+.netc{border-radius:12px;padding:10px 12px;margin-bottom:12px;border:1px solid var(--bd);border-right:6px solid #8a94a6;background:var(--card)}
+.netc.ok{border-right-color:#1e8e4e;background:rgba(30,142,78,.10)}
+.netc.warn{border-right-color:#e0a800;background:rgba(224,168,0,.13)}
+.netc.bad{border-right-color:#c0392b;background:rgba(192,57,43,.12)}
+.netc .nt{font-weight:700}
+.ndev{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.ndev span{border:1px solid var(--bd);border-radius:999px;padding:3px 10px;font-size:12.5px;background:var(--card)}
+#syncChip[data-s=ok]{background:#1e8e4e!important;color:#fff!important}
+#syncChip[data-s=busy],#syncChip[data-s=idle]{background:#e0a800!important;color:#111!important}
+#syncChip[data-s=err],#syncChip[data-s=offline]{background:#c0392b!important;color:#fff!important}
+@media print{.netc{display:none!important}}
 </style>
 </head>
 <body>
@@ -201,7 +216,7 @@ function recordFu(sid,x){
   let rec=opens[0];
   db.fu=db.fu.filter(f=>!(f.open&&f.sid===sid&&f!==rec));
   const by=(typeof ME!=='undefined'&&ME)?{by:ME.id,byn:ME.name}:{};
-  const fields=Object.assign({open:false,done:false},x,by);
+  const fields=Object.assign({open:false,done:false,kind:rec?'A':'P'},x,by);
   if(rec)Object.assign(rec,fields);else{rec=Object.assign({id:uid(),sid},fields);db.fu.push(rec)}
   db.fu.forEach(f=>{if(f.sid===sid&&f.id!==rec.id&&!f.open&&f.next&&!f.done)f.done=true});
   return rec;
@@ -282,7 +297,7 @@ function render(){
   $('#main').innerHTML=v();
   if(state.tab==='msg')gPrev();
   applyRoleUI();
-  if($('#devBox'))devRefresh();
+  if($('#devBox')||$('#netBar'))devRefresh();
 }
 
 /* ---------- cloud sync (Firebase Realtime Database, end-to-end encrypted) ---------- */
@@ -343,7 +358,8 @@ function setStat(s,m){
   sStat={s,m:m||''};const c=$('#syncChip');if(!c)return;
   const tm=new Date();const hm=String(tm.getHours()).padStart(2,'0')+':'+String(tm.getMinutes()).padStart(2,'0');
   c.textContent={off:'☁ المزامنة: غير مفعّلة',busy:'☁ جارٍ المزامنة…',ok:'☁ متزامن ✓ '+hm+((typeof DEVS!=='undefined'&&DEVS.length>1)?' • '+DEVS.length+' أجهزة':''),idle:'☁ المزامنة مفعّلة',offline:'☁ غير متصل',err:'☁ ⚠ خطأ في المزامنة'}[s]||'☁';
-  c.title=m||'';
+  const off=navigator.onLine===false;if(off)c.textContent='☁ غير متصل بالإنترنت';c.dataset.s=off?'offline':s;if(s==='ok')_lsync=Date.now();
+  c.title=m||'';netDraw();
 }
 function syncErr(e){
   if(e&&e.name==='OperationError')return 'كلمة السر غير مطابقة لبيانات هذه الغرفة';
@@ -540,7 +556,7 @@ const NOD='<div class="empty">لا توجد بيانات بعد</div>';
 const EVC=[['h','حفظ الترانيم','#2f5597'],['l','الألحان','#8e44ad'],['r','الاستجابة داخل الفصل','#16a085']];
 function rankList(rows,fn){return rows.length?rows.map((r,i)=>`<div class="rk"><span class="n">${i+1}</span>${fn(r)}</div>`).join(''):NOD}
 
-function vHome(){return bkBanner()+myFuBanner()+vHome0()}
+function vHome(){return netHtml()+bkBanner()+myFuBanner()+vHome0()}
 function vHome0(){
   const ds=sessions(),n=db.students.length;
   const need=sorted().filter(s=>stats(s.id).need&&myScope(s.id));
@@ -592,7 +608,7 @@ function profCharts(t,e){
 function vStudents(){
   const q=state.q.trim(),dg=dupGroups();
   const list=fsorted().filter(s=>!q||(s.name+' '+(can('contact')?s.phone+' '+s.address:'')).includes(q));
-  return (dg.length?`<div class="card noprint" style="background:var(--wab);border-color:var(--wa)"><div class="row sp"><span>⚠ يوجد <b>${dg.length}</b> مجموعة أسماء متشابهة محتملة (قد تكونوا توائم)</span><button class="btn sm pri" data-act="dupRev">مراجعة: دمج أو تجاهل</button></div></div>`:'')+`<div class="card"><div class="row sp"><input id="q" placeholder="🔍 بحث بالاسم أو الرقم أو العنوان" value="${esc(state.q)}" style="flex:1;min-width:200px"><button class="btn pri" data-act="addStudent">+ إضافة شاب</button>${can('rep')?'<button class="btn" data-act="cardsAll">🪪 طباعة البطاقات</button>':''}</div>${grChips()}</div>
+  return (dg.length?`<div class="card noprint" style="background:var(--wab);border-color:var(--wa)"><div class="row sp"><span>⚠ يوجد <b>${dg.length}</b> مجموعة أسماء متشابهة محتملة (قد تكونوا توائم)</span><button class="btn sm pri" data-act="dupRev">مراجعة: دمج أو تجاهل</button></div></div>`:'')+`<div class="card"><div class="row sp"><input id="q" placeholder="🔍 بحث بالاسم أو الرقم أو العنوان" value="${esc(state.q)}" style="flex:1;min-width:200px"><button class="btn pri" data-act="addStudent">+ إضافة شاب</button>${can('rep')?'<button class="btn" data-act="cardsAll">🪪 طباعة البطاقات</button>':''}${can('contact')?'<button class="btn" data-act="vcfOpen">📇 جهات الاتصال (VCF)</button>':''}</div>${grChips()}</div>
   <div class="card"><div class="tw"><table><tr><th>م</th><th>الاسم</th><th>المرحلة</th><th>التليفون</th><th>العنوان</th><th>تواصل</th><th></th></tr>
   ${list.map((s,i)=>`<tr><td>${i+1}</td><td>${av(s)}<a href="#" data-act="profile" data-id="${s.id}"><b>${esc(s.name)}</b></a>${bdBadge(s)}${s.notes?`<div class="muted">📝 ${esc(s.notes)}</div>`:''}</td><td>${grBadge(s)}</td><td>${can('contact')?esc(s.phone):'—'}</td><td>${can('contact')?esc(s.address):'—'}</td><td>${contact(s)}</td><td><button class="btn sm" data-act="editStudent" data-id="${s.id}">تعديل</button> <button class="btn sm dng" data-act="delStudent" data-id="${s.id}">حذف</button></td></tr>`).join('')}</table></div>
   ${list.length?'':'<div class="empty">لا توجد نتائج</div>'}</div>`;
@@ -997,7 +1013,7 @@ const ACT_PERM={
   allP:'att',clearAtt:'att',setAtt:'att',
   goFu:'fu',fuNew:'fu',fuSave:'fu',fuClose:'fu',fuDone:'fu',fuDel:'fuDel',
   gneed:'msg',gsel:'msg',gwho:'msg',gpreset:'msg',gwa:'msg',gnext:'msg',gsmsone:'msg',gsms:'msg',gsmslog:'msg',gsmsno:'msg',gcopym:'msg',gcopyn:'msg',greset:'msg',
-  csvSum:'rep',csvMat:'rep',cardOne:'rep',cardsAll:'rep',mRpt:'rep',asgForm:'cfg',devRename:'cfg',asgRemind:'cfg',asgCopyRem:'cfg',asgGo:'cfg',asgFill:'cfg',asgF:'cfg',asgPrint:'cfg',asgDone:'fu',
+  csvSum:'rep',csvMat:'rep',cardOne:'rep',cardsAll:'rep',mRpt:'rep',asgForm:'cfg',vcfOpen:'contact',vcfGo:'contact',devRename:'cfg',asgRemind:'cfg',asgCopyRem:'cfg',asgGo:'cfg',asgFill:'cfg',asgF:'cfg',asgPrint:'cfg',asgDone:'fu',
   mergeG:'stu',ignG:'stu',unIgn:'stu',unIgnAll:'stu',dupMergeForm:'stu',dateMgr:'cfg',dateMove:'cfg',dateDel:'cfg',bgClear:'cfg',bgDef:'cfg',saveSet:'cfg',exp:'cfg',csvStu:'cfg',sample:'cfg',wipe:'cfg',
   syncRules:'cfg',syncGen:'cfg',syncConnect:'cfg',syncPaste:'cfg',syncCode:'cfg',syncOff:'cfg'};
 const DIS_ACT=new Set(['setAtt']);
@@ -1429,6 +1445,11 @@ function asgDoneRec(sid,ws){
   const nx=asgKeys().find(k=>k>ws);
   return db.fu.filter(f=>f.sid===sid&&!f.open&&f.date>=ws&&(!nx||f.date<nx)).sort((a,b)=>String(b.date).localeCompare(String(a.date)))[0]||null;
 }
+/* نوع الافتقاد: غياب (أسبوعي — الأولوية) أو دوري */
+function fuKind(sid,ws){const d=ws?asgDoneRec(sid,ws):null;if(d)return d.kind||(d.sess?'A':'P');return stats(sid).need?'A':'P'}
+const kindBadge=k=>k==='A'?'<span class="badge r">🔴 غياب</span>':'<span class="badge" style="background:var(--in);color:var(--pr2)">🔵 دوري</span>';
+function absSess(sid){const t=db.fu.find(f=>f.open&&f.sid===sid);return t&&t.sess?t.sess:null}
+function lastFuDate(sid){const r=db.fu.filter(f=>f.sid===sid&&!f.open&&f.date).sort((a,b)=>String(b.date).localeCompare(String(a.date)))[0];return r?r.date:null}
 function asgPool(ws){const sc=(db.asg[ws]||{})._s||'all';return sorted().filter(s=>sc==='need'?stats(s.id).need:true)}
 function asgStat(ws){
   const map=db.asg[ws]||{},by={},un=[],pool=new Set(asgPool(ws).map(s=>s.id));
@@ -1436,9 +1457,9 @@ function asgStat(ws){
   sorted().forEach(s=>{const o=map[s.id];
     if(o&&uActive(o))(by[o]=by[o]||[]).push(s);
     else if(pool.has(s.id)||(o&&!asgDoneRec(s.id,ws)))un.push(s)});
-  let assigned=0,done=0;
-  Object.keys(by).forEach(u=>by[u].forEach(s=>{assigned++;if(asgDoneRec(s.id,ws))done++}));
-  return {by,un,assigned,done};
+  const K={A:{n:0,d:0},P:{n:0,d:0}};let assigned=0,done=0;
+  Object.keys(by).forEach(u=>by[u].forEach(s=>{const k=fuKind(s.id,ws),dn=!!asgDoneRec(s.id,ws);assigned++;K[k].n++;if(dn){done++;K[k].d++}}));
+  return {by,un,assigned,done,K};
 }
 
 function vFu(){
@@ -1450,24 +1471,32 @@ function vFu(){
 function asgAdminCard(){
   const ks=asgKeys();
   const head=`<div class="row sp"><h2 style="margin:0">👥 توزيع الافتقاد على الخدام</h2><button class="btn pri sm" data-act="asgForm">🔀 توزيع جديد</button></div>`;
-  if(!ks.length)return `<div class="card">${head}<p class="muted" style="margin:8px 0 0">وزّع أسماء الشباب على الخدام كل أسبوع؛ يفتح كل خادم الافتقاد فيجد أسماء مجموعته فقط، وتتابع أنت من هنا من لم يُفتقد بعد.${asgServants().filter(u=>u.role==='servant').length?'':'<br><b>أنشئ حسابًا لكل خادم أولًا من الإعدادات ← المستخدمون.</b>'}</p></div>`;
-  const ws=asgWk(),latest=ws===asgCur(),st=asgStat(ws),pct=st.assigned?Math.round(st.done/st.assigned*100):0,f=state.asgF||'all';
+  if(!ks.length)return `<div class="card">${head}<p class="muted" style="margin:8px 0 0">وزّع أسماء الشباب على الخدام كل أسبوع: <b>🔴 افتقاد الغياب</b> (الأسبوعي، وله الأولوية) و<b>🔵 افتقاد دوري</b> (لباقي الشباب). يفتح كل خادم الافتقاد فيجد أسماء مجموعته فقط، وتتابع أنت من هنا من لم يُفتقد بعد.${asgServants().filter(u=>u.role==='servant').length?'':'<br><b>أنشئ حسابًا لكل خادم أولًا من الإعدادات ← المستخدمون.</b>'}</p></div>`;
+  const ws=asgWk(),latest=ws===asgCur(),st=asgStat(ws),pct=st.assigned?Math.round(st.done/st.assigned*100):0,f=state.asgF||'all',K=st.K;
   const sel=`<select id="asgWk">${ks.slice().reverse().map(k=>`<option value="${k}" ${k===ws?'selected':''}>أسبوع ${fd(k)}</option>`).join('')}</select>`;
   const opts=cur=>`<option value="">— غير موزّع —</option>`+asgServants().map(u=>`<option value="${u.id}" ${u.id===cur?'selected':''}>${esc(u.name)}</option>`).join('');
+  const kp=k=>K[k].n?Math.round(K[k].d/K[k].n*100):0;
   const row=s=>{
-    const d=asgDoneRec(s.id,ws),t=stats(s.id);if(f==='pend'&&d)return '';
-    return `<div class="asr"><div style="flex:1;min-width:150px">${d?'✅':'⏳'} <a href="#" data-act="profile" data-id="${s.id}"><b>${esc(s.name)}</b></a>${t.need?' <span class="badge r">غائب</span>':''}<div class="muted" style="font-size:12px">${d?esc(d.method||'')+(d.result?' — '+esc(d.result):'')+' • '+fd(d.date)+(d.byn?' • '+esc(d.byn):''):'لم يُفتقد بعد'}</div></div>${latest?`<select data-asgmv="${s.id}">${opts((db.asg[ws]||{})[s.id])}</select>`:''}</div>`;
+    const d=asgDoneRec(s.id,ws),k=fuKind(s.id,ws);if(f==='pend'&&d)return '';if(f==='abs'&&k!=='A')return '';
+    const as=!d&&k==='A'?absSess(s.id):null;
+    return `<div class="asr${k==='A'?' ka':''}"><div style="flex:1;min-width:150px">${d?'✅':'⏳'} <a href="#" data-act="profile" data-id="${s.id}"><b>${esc(s.name)}</b></a> ${kindBadge(k)}${as?` <span class="muted" style="font-size:12px">غاب ${fd(as)}</span>`:''}<div class="muted" style="font-size:12px">${d?esc(d.method||'')+(d.result?' — '+esc(d.result):'')+' • '+fd(d.date)+(d.byn?' • '+esc(d.byn):''):'لم يُفتقد بعد'}</div></div>${latest?`<select data-asgmv="${s.id}">${opts((db.asg[ws]||{})[s.id])}</select>`:''}</div>`;
   };
+  const ord=(L)=>L.slice().sort((x,y)=>((fuKind(y.id,ws)==='A')-(fuKind(x.id,ws)==='A'))||((!!asgDoneRec(x.id,ws))-(!!asgDoneRec(y.id,ws))));
   const blocks=Object.keys(st.by).filter(u=>st.by[u].length).map(u=>{
-    const L=st.by[u],dn=L.filter(s=>asgDoneRec(s.id,ws)).length;
-    return `<details class="card" open style="background:var(--in);margin:8px 0"><summary><b>${esc(uName(u))}</b> <span class="badge ${dn===L.length?'g':'y'}">${dn} من ${L.length}</span></summary>${L.map(row).join('')||'<div class="muted">كلهم تم افتقادهم ✓</div>'}</details>`;
+    const L=st.by[u],dn=L.filter(s=>asgDoneRec(s.id,ws)).length,a=L.filter(s=>fuKind(s.id,ws)==='A'),pp=L.filter(s=>fuKind(s.id,ws)==='P');
+    const ad=a.filter(s=>asgDoneRec(s.id,ws)).length,pd=pp.filter(s=>asgDoneRec(s.id,ws)).length;
+    return `<details class="card" open style="background:var(--in);margin:8px 0"><summary><b>${esc(uName(u))}</b> <span class="badge r">🔴 غياب ${ad}/${a.length}</span> <span class="badge" style="background:var(--card);color:var(--pr2)">🔵 دوري ${pd}/${pp.length}</span></summary>${ord(L).map(row).join('')||'<div class="muted">كلهم تم افتقادهم ✓</div>'}</details>`;
   }).join('');
-  const unb=st.un.length?`<details class="card" open style="border-color:#e0a800;margin:8px 0"><summary><b>⚠ غير موزّعين</b> <span class="badge r">${st.un.length}</span></summary>${st.un.map(row).join('')}</details>`:'';
+  const unb=st.un.length?`<details class="card" open style="border-color:#e0a800;margin:8px 0"><summary><b>⚠ غير موزّعين</b> <span class="badge r">${st.un.length}</span></summary>${ord(st.un).map(row).join('')}</details>`:'';
   return `<div class="card">${head}
   <div class="row" style="margin:8px 0">${sel}<span class="muted">${latest?'التوزيع الحالي':'توزيع سابق (للاطلاع)'}</span></div>
   <div class="row sp"><span><b>${st.done}</b> من <b>${st.assigned}</b> تم افتقادهم${st.un.length?` • <span style="color:#c0392b">${st.un.length} غير موزّع</span>`:''}</span><b>${pct}%</b></div>
   <div class="asbar"><i style="width:${pct}%"></i></div>
-  <div class="row" style="margin:10px 0"><div class="tg"><button class="${f==='all'?'P on':''}" data-act="asgF" data-v="all">الكل</button><button class="${f==='pend'?'P on':''}" data-act="asgF" data-v="pend">⏳ المتبقّي فقط</button></div><button class="btn sm" data-act="asgPrint">🖨 كشف التوزيع</button>${latest&&st.assigned>st.done?'<button class="btn sm" data-act="asgRemind">📲 تذكير الخدام المتأخرين</button>':''}${latest&&st.un.length?'<button class="btn sm" data-act="asgFill">🔁 وزّع غير الموزّعين</button>':''}</div>
+  <div class="row" style="margin:8px 0;align-items:stretch">
+   <div class="kbox"><b>🔴 افتقاد الغياب (الأولوية)</b><div>${K.A.d} من ${K.A.n}</div><div class="asbar r"><i style="width:${kp('A')}%"></i></div></div>
+   <div class="kbox"><b>🔵 افتقاد دوري</b><div>${K.P.d} من ${K.P.n}</div><div class="asbar b"><i style="width:${kp('P')}%"></i></div></div>
+  </div>
+  <div class="row" style="margin:10px 0"><div class="tg"><button class="${f==='all'?'P on':''}" data-act="asgF" data-v="all">الكل</button><button class="${f==='pend'?'P on':''}" data-act="asgF" data-v="pend">⏳ المتبقّي فقط</button><button class="${f==='abs'?'P on':''}" data-act="asgF" data-v="abs">🔴 الغياب فقط</button></div><button class="btn sm" data-act="asgPrint">🖨 كشف التوزيع</button>${latest&&st.assigned>st.done?'<button class="btn sm" data-act="asgRemind">📲 تذكير الخدام المتأخرين</button>':''}${latest&&st.un.length?'<button class="btn sm" data-act="asgFill">🔁 وزّع غير الموزّعين</button>':''}</div>
   ${blocks}${unb}</div>`;
 }
 
@@ -1475,16 +1504,24 @@ function vFuMine0(sub){
   const ws=asgCur(),me=ME?ME.id:'';
   const mine=ws?sorted().filter(s=>asgOwner(s.id,ws)===me):[];
   if(sub&&!mine.length)return '';
-  const items=mine.map(s=>({s,d:asgDoneRec(s.id,ws)})),dn=items.filter(x=>x.d).length,pct=items.length?Math.round(dn/items.length*100):0;
+  const items=mine.map(s=>({s,d:asgDoneRec(s.id,ws),k:fuKind(s.id,ws)})),dn=items.filter(x=>x.d).length,pct=items.length?Math.round(dn/items.length*100):0;
   const meth=id=>`<select id="am-${id}"><option>اتصال</option><option>رسالة</option><option>زيارة</option></select>`;
-  const pend=items.filter(x=>!x.d).map(({s})=>{const t=stats(s.id);
-    return `<div class="card" id="ac-${s.id}" style="background:var(--in);margin:8px 0"><div class="row sp"><span><a href="#" data-act="profile" data-id="${s.id}"><b>${esc(s.name)}</b></a>${t.need?' <span class="badge r">غائب</span>':t.last==='P'?' <span class="badge g">حضر</span>':''}${t.consec>=2?` <span class="badge r">${t.consec} غيابات متتالية</span>`:''}</span><span class="row">${contact(s)}</span></div>
-    ${can('fu')?`<div class="fg" style="margin-top:8px"><div><label>الطريقة</label>${meth(s.id)}</div><div><label>النتيجة / سبب الغياب</label><input id="ar-${s.id}" placeholder="مثلًا: كان تعبان / مسافر"></div><div><label>متابعة قادمة (اختياري)</label><input type="date" id="an-${s.id}"></div></div>
-    <div class="row" style="margin-top:8px"><button class="btn pri sm" data-act="asgDone" data-id="${s.id}">تم الافتقاد ✓</button></div>`:''}</div>`}).join('');
-  const fin=items.filter(x=>x.d).map(({s,d})=>`<div class="asr"><div>✅ <a href="#" data-act="profile" data-id="${s.id}">${esc(s.name)}</a><div class="muted" style="font-size:12px">${esc(d.method||'')}${d.result?' — '+esc(d.result):''} • ${fd(d.date)}</div></div></div>`).join('');
+  const KA=items.filter(x=>x.k==='A'),KP=items.filter(x=>x.k==='P');
+  const card=({s,k})=>{
+    const t=stats(s.id),as=k==='A'?absSess(s.id):null,lf=lastFuDate(s.id);
+    const info=k==='A'?`<span class="badge r">🔴 غياب</span>${as?` <span class="muted">غاب يوم ${fd(as)}</span>`:''}${t.consec>=2?` <span class="badge r">${t.consec} غيابات متتالية</span>`:''}`
+      :`<span class="badge" style="background:var(--card);color:var(--pr2)">🔵 دوري</span> <span class="muted">${lf?'آخر افتقاد '+fd(lf):'لم يُفتقد من قبل'}</span>${t.last==='P'?' <span class="badge g">حضر</span>':''}`;
+    return `<div class="card${k==='A'?' ka':''}" id="ac-${s.id}" style="background:var(--in);margin:8px 0"><div class="row sp"><span><a href="#" data-act="profile" data-id="${s.id}"><b>${esc(s.name)}</b></a> ${info}</span><span class="row">${contact(s)}</span></div>
+    ${can('fu')?`<div class="fg" style="margin-top:8px"><div><label>الطريقة</label>${meth(s.id)}</div><div><label>${k==='A'?'سبب الغياب / النتيجة':'حالته / ملاحظات'}</label><input id="ar-${s.id}" placeholder="${k==='A'?'مثلًا: كان تعبان / مسافر':'مثلًا: بخير / محتاج زيارة'}"></div><div><label>متابعة قادمة (اختياري)</label><input type="date" id="an-${s.id}"></div></div>
+    <div class="row" style="margin-top:8px"><button class="btn pri sm" data-act="asgDone" data-id="${s.id}">تم الافتقاد ✓</button></div>`:''}</div>`};
+  const pa=KA.filter(x=>!x.d),pp=KP.filter(x=>!x.d);
+  const sec=(t,L,c)=>L.length?`<h3 style="margin:14px 0 4px;color:${c}">${t} (${L.length})</h3>${L.map(card).join('')}`:'';
+  const fin=items.filter(x=>x.d).map(({s,d,k})=>`<div class="asr"><div>✅ <a href="#" data-act="profile" data-id="${s.id}">${esc(s.name)}</a> ${kindBadge(d.kind||k)}<div class="muted" style="font-size:12px">${esc(d.method||'')}${d.result?' — '+esc(d.result):''} • ${fd(d.date)}</div></div></div>`).join('');
+  const kn=(L)=>`${L.filter(x=>x.d).length} من ${L.length}`;
   return `<div class="card"><h2 style="margin-top:0">📋 ${sub?'أسمائي':'افتقادي'} هذا الأسبوع</h2>${ws?`<div class="muted">من ${fd(ws)}</div>`:''}
-  ${items.length?`<div class="row sp" style="margin-top:8px"><span><b>${dn}</b> من <b>${items.length}</b> تم افتقادهم</span><b>${pct}%</b></div><div class="asbar"><i style="width:${pct}%"></i></div>`:`<div class="empty">${ws?'لا توجد أسماء موزّعة عليك هذا الأسبوع':'لم يتم توزيع أسماء بعد'}</div>`}
-  ${pend}${fin?`<details style="margin-top:8px"><summary><b>تم افتقادهم (${dn})</b></summary>${fin}</details>`:''}</div>`;
+  ${items.length?`<div class="row sp" style="margin-top:8px"><span><b>${dn}</b> من <b>${items.length}</b> تم افتقادهم</span><b>${pct}%</b></div><div class="asbar"><i style="width:${pct}%"></i></div>
+  <div class="row" style="margin-top:6px"><span class="badge r">🔴 غياب ${kn(KA)}</span><span class="badge" style="background:var(--card);color:var(--pr2)">🔵 دوري ${kn(KP)}</span></div>`:`<div class="empty">${ws?'لا توجد أسماء موزّعة عليك هذا الأسبوع':'لم يتم توزيع أسماء بعد'}</div>`}
+  ${sec('🔴 افتقاد الغياب — الأولوية',pa,'#c0392b')}${sec('🔵 افتقاد دوري',pp,'var(--pr2)')}${fin?`<details style="margin-top:10px"><summary><b>تم افتقادهم (${dn})</b></summary>${fin}</details>`:''}</div>`;
 }
 
 function asgForm(){
@@ -1493,17 +1530,18 @@ function asgForm(){
   const anyS=sv.some(u=>u.role==='servant');
   openM(`<div class="row sp"><h2 style="margin:0">🔀 توزيع الافتقاد</h2><button class="btn sm" data-act="closeM">✕</button></div>
   <div class="fg" style="margin-top:10px"><div><label>بداية الأسبوع</label><input type="date" id="agD" value="${today()}"></div>
-  <div><label>الأسماء الموزّعة</label><select id="agS"><option value="all">كل الشباب</option><option value="need">المطلوب افتقادهم (الغائبون) فقط</option></select></div></div>
+  <div><label>الأسماء الموزّعة</label><select id="agS"><option value="all">غياب + دوري (كل الشباب)</option><option value="need">افتقاد الغياب فقط (الغائبون)</option></select></div></div>
   <div class="f" style="margin-top:10px"><label>الخدام المشاركون هذا الأسبوع</label>${sv.map(u=>`<label style="display:flex;gap:8px;align-items:center;color:var(--tx);margin:4px 0"><input type="checkbox" class="agU" value="${u.id}" ${(u.role==='servant'||!anyS)?'checked':''}> ${esc(u.name)} <span class="muted">(${ROLES[u.role]})</span></label>`).join('')}</div>
   <label style="display:flex;gap:8px;align-items:center;color:var(--tx);margin:8px 0"><input type="checkbox" id="agR" checked> تدوير المجموعات عن الأسبوع السابق</label>
-  <div id="agP" class="muted" style="margin:6px 0"></div>
+  <div class="muted" style="font-size:12px">🔴 أسماء الغياب تُوزَّع <b>أولًا وبالتساوي</b> على كل الخدام (لها الأولوية)، ثم 🔵 الافتقاد الدوري لباقي الشباب بحيث يتساوى إجمالي كل خادم.</div>
+  <div id="agP" style="margin:8px 0;font-weight:700"></div>
   <div class="row"><button class="btn pri" data-act="asgGo">توزيع</button><button class="btn" data-act="closeM">إلغاء</button></div>`);
   asgPrev();
 }
 function asgPrev(){
   const e=$('#agP');if(!e)return;
-  const n=document.querySelectorAll('.agU:checked').length,sc=$('#agS').value,m=sorted().filter(s=>sc==='need'?stats(s.id).need:true).length;
-  e.textContent=n?`سيتم تقسيم ${m} اسم على ${n} خادم (حوالي ${Math.ceil(m/n)} لكل خادم).`:'اختر خادمًا واحدًا على الأقل';
+  const n=document.querySelectorAll('.agU:checked').length,sc=$('#agS').value,L=sorted(),a=L.filter(s=>stats(s.id).need).length,p=sc==='need'?0:L.length-a;
+  e.textContent=n?`🔴 ${a} اسم غياب${p?` + 🔵 ${p} اسم دوري`:''} على ${n} خادم — حوالي ${Math.ceil(a/n)} غياب${p?` و${Math.ceil((a+p)/n)} إجمالي`:''} لكل خادم.`:'اختر خادمًا واحدًا على الأقل';
 }
 function asgGo(){
   const ws=$('#agD').value||today(),sc=$('#agS').value,rot=$('#agR').checked;
@@ -1512,10 +1550,12 @@ function asgGo(){
   const list=sorted().filter(s=>sc==='need'?stats(s.id).need:true);
   if(!list.length){toast('لا توجد أسماء للتوزيع');return}
   if(db.asg[ws]&&!confirm('يوجد توزيع بنفس التاريخ وسيتم استبداله. متابعة؟'))return;
-  const k=rot?asgKeys().filter(x=>x<ws).length:0,n=uids.length,base=Math.floor(list.length/n),extra=list.length%n,map={_s:sc};
-  let i=0;
-  for(let b=0;b<n;b++){const size=base+(b<extra?1:0),u=uids[(b+k)%n];for(let j=0;j<size;j++)map[list[i++].id]=u}
-  db.asg[ws]=map;state.asgWs=null;save();closeM();logEv('توزيع الافتقاد: '+list.length+' اسم على '+n+' خادم');render();toast('تم التوزيع ✓');
+  const k=rot?asgKeys().filter(x=>x<ws).length:0,n=uids.length,order=uids.map((u,i)=>uids[(i+k)%n]),map={_s:sc},cnt={};
+  order.forEach(u=>cnt[u]=0);
+  const A=list.filter(s=>stats(s.id).need),Pn=list.filter(s=>!stats(s.id).need);
+  A.forEach((s,i)=>{const u=order[i%n];map[s.id]=u;cnt[u]++});            /* الغياب أولًا: بالتساوي */
+  Pn.forEach(s=>{let b=order[0];order.forEach(u=>{if(cnt[u]<cnt[b])b=u});map[s.id]=b;cnt[b]++});   /* الدوري: يكمّل حتى يتساوى الإجمالي */
+  db.asg[ws]=map;state.asgWs=null;save();closeM();logEv('توزيع الافتقاد: '+A.length+' غياب + '+Pn.length+' دوري على '+n+' خادم');render();toast('تم التوزيع ✓');
 }
 function asgFill(){
   const ws=asgCur();if(!ws)return;
@@ -1523,14 +1563,21 @@ function asgFill(){
   const owners=Object.keys(st.by).filter(u=>st.by[u].length);
   const pool=owners.length?owners:asgServants().filter(u=>u.role==='servant').map(u=>u.id);
   if(!pool.length){toast('لا يوجد خدام لتوزيع الأسماء عليهم');return}
-  const cnt={};pool.forEach(u=>cnt[u]=(st.by[u]||[]).length);
-  st.un.forEach(s=>{const u=pool.slice().sort((a,b)=>cnt[a]-cnt[b])[0];db.asg[ws][s.id]=u;cnt[u]++});
+  const cnt={},ac={};pool.forEach(u=>{const L=st.by[u]||[];cnt[u]=L.length;ac[u]=L.filter(s=>fuKind(s.id,ws)==='A').length});
+  st.un.slice().sort((x,y)=>(fuKind(y.id,ws)==='A')-(fuKind(x.id,ws)==='A')).forEach(s=>{
+    const isA=fuKind(s.id,ws)==='A';
+    const u=pool.slice().sort((a,b)=>isA?(ac[a]-ac[b]||cnt[a]-cnt[b]):(cnt[a]-cnt[b]))[0];
+    db.asg[ws][s.id]=u;cnt[u]++;if(isA)ac[u]++;
+  });
   save();render();toast('تم توزيع '+st.un.length+' اسم');
 }
 function asgPrintOpen(){
   const ws=asgWk();if(!ws)return;const st=asgStat(ws);
-  const secs=Object.keys(st.by).filter(u=>st.by[u].length).map(u=>`<div class="asp"><div class="mrh"><div><h1>كشف الافتقاد</h1><div class="mrsub">${esc(db.settings.cls)} — الخادم: ${esc(uName(u))}</div></div><div class="mrd">أسبوع ${fd(ws)}</div></div>
-  <table class="mt"><thead><tr><th>م</th><th>الاسم</th><th>التليفون</th><th>العنوان</th><th>تم ✓</th><th>النتيجة / ملاحظات</th></tr></thead><tbody>${st.by[u].map((s,i)=>`<tr><td>${i+1}</td><td style="text-align:right">${mrPic(s,22)}${esc(s.name)}</td><td dir="ltr">${esc(s.phone||'')}</td><td>${esc(s.address||'')}</td><td>☐</td><td style="width:35%"></td></tr>`).join('')}</tbody></table></div>`).join('');
+  const ord=L=>L.slice().sort((x,y)=>(fuKind(y.id,ws)==='A')-(fuKind(x.id,ws)==='A'));
+  const secs=Object.keys(st.by).filter(u=>st.by[u].length).map(u=>{
+    const L=ord(st.by[u]),na=L.filter(s=>fuKind(s.id,ws)==='A').length;
+    return `<div class="asp"><div class="mrh"><div><h1>كشف الافتقاد</h1><div class="mrsub">${esc(db.settings.cls)} — الخادم: ${esc(uName(u))}</div></div><div class="mrd">أسبوع ${fd(ws)}<br>🔴 غياب ${na} • 🔵 دوري ${L.length-na}</div></div>
+  <table class="mt"><thead><tr><th>م</th><th>النوع</th><th>الاسم</th><th>التليفون</th><th>العنوان</th><th>تم ✓</th><th>النتيجة / ملاحظات</th></tr></thead><tbody>${L.map((s,i)=>{const a=fuKind(s.id,ws)==='A';return `<tr style="${a?'background:#fdecea':''}"><td>${i+1}</td><td>${a?'<b style="color:#c0392b">غياب</b>':'دوري'}</td><td style="text-align:right">${mrPic(s,22)}${esc(s.name)}</td><td dir="ltr">${esc(s.phone||'')}</td><td>${esc(s.address||'')}</td><td>☐</td><td style="width:30%"></td></tr>`}).join('')}</tbody></table></div>`}).join('');
   showPrt('كشف التوزيع — أسبوع '+fd(ws),secs||'<div class="empty">لا يوجد</div>');
 }
 
@@ -1568,8 +1615,10 @@ document.addEventListener('change',e=>{
 function myPending(){const ws=asgCur();if(!ws||!ME)return 0;return sorted().filter(s=>asgOwner(s.id,ws)===ME.id&&!asgDoneRec(s.id,ws)).length}
 function myFuBanner(){
   if(!secOn()||!ME||!asgOn())return '';
-  const n=myPending();if(!n)return '';
-  return `<div class="card" style="border-color:#e0a800"><b>📋 عليك ${n} اسم للافتقاد هذا الأسبوع</b><p class="muted" style="margin:6px 0">لم تفتقدهم بعد.</p><button class="btn sm pri" data-act="goFu">افتح قائمتي</button></div>`;
+  const ws=asgCur(),P=sorted().filter(s=>asgOwner(s.id,ws)===ME.id&&!asgDoneRec(s.id,ws));
+  if(!P.length)return '';
+  const a=P.filter(s=>fuKind(s.id,ws)==='A').length;
+  return `<div class="card${a?' ka':''}" style="border-color:#e0a800"><b>📋 عليك ${P.length} اسم للافتقاد هذا الأسبوع</b><p class="muted" style="margin:6px 0">${a?`<b style="color:#c0392b">🔴 ${a} غياب (أولوية)</b>`:''}${a&&P.length>a?' و ':''}${P.length>a?`🔵 ${P.length-a} دوري`:''} — لم تفتقدهم بعد.</p><button class="btn sm pri" data-act="goFu">افتح قائمتي</button></div>`;
 }
 function fuHistory(){
   if(!ME)return '';
@@ -1577,16 +1626,20 @@ function fuHistory(){
   const out=wks.map(ws=>{
     const L=sorted().filter(s=>(db.asg[ws]||{})[s.id]===me);if(!L.length)return '';
     const dn=L.filter(s=>asgDoneRec(s.id,ws)).length;
-    return `<details class="card" style="margin:8px 0"><summary><b>أسبوع ${fd(ws)}</b> <span class="badge ${dn===L.length?'g':'y'}">${dn} من ${L.length}</span></summary>${L.map(s=>{const d=asgDoneRec(s.id,ws);return `<div class="asr"><div>${d?'✅':'❌'} ${esc(s.name)}<div class="muted" style="font-size:12px">${d?esc(d.method||'')+(d.result?' — '+esc(d.result):'')+' • '+fd(d.date):'لم يتم افتقاده'}</div></div></div>`}).join('')}</details>`;
+    return `<details class="card" style="margin:8px 0"><summary><b>أسبوع ${fd(ws)}</b> <span class="badge ${dn===L.length?'g':'y'}">${dn} من ${L.length}</span></summary>${L.map(s=>{const d=asgDoneRec(s.id,ws);return `<div class="asr"><div>${d?'✅':'❌'} ${esc(s.name)} ${d?kindBadge(d.kind||(d.sess?'A':'P')):''}<div class="muted" style="font-size:12px">${d?esc(d.method||'')+(d.result?' — '+esc(d.result):'')+' • '+fd(d.date):'لم يتم افتقاده'}</div></div></div>`}).join('')}</details>`;
   }).join('');
   return out?`<div class="card"><h2 style="margin-top:0">📅 سجل افتقادي (الأسابيع السابقة)</h2>${out}</div>`:'';
 }
 function vFuMine(sub){return vFuMine0(sub)+(sub?'':fuHistory())}
 
 function remMsg(u,list,total){
-  const first=(u.name||'').split(' ')[0];
-  const names=list.slice(0,15).map(s=>'• '+s.name).join('\n')+(list.length>15?'\n… و'+(list.length-15)+' آخرين':'');
-  return 'سلام ونعمة '+first+' 🙏\nباقي عليك '+list.length+(total?' من '+total:'')+' للافتقاد هذا الأسبوع:\n'+names+'\nربنا يعوّض تعبك ❤️';
+  const ws=asgCur(),first=(u.name||'').split(' ')[0];
+  const A=list.filter(s=>fuKind(s.id,ws)==='A'),Pn=list.filter(s=>fuKind(s.id,ws)!=='A');
+  const fmt=(L,ic)=>L.slice(0,12).map(s=>ic+' '+s.name).join('\n')+(L.length>12?'\n… و'+(L.length-12)+' آخرين':'');
+  return 'سلام ونعمة '+first+' 🙏\nباقي عليك '+list.length+(total?' من '+total:'')+' للافتقاد هذا الأسبوع:'
+    +(A.length?'\n\n🔴 افتقاد الغياب (الأولوية) — '+A.length+':\n'+fmt(A,'•'):'')
+    +(Pn.length?'\n\n🔵 افتقاد دوري — '+Pn.length+':\n'+fmt(Pn,'•'):'')
+    +'\n\nربنا يعوّض تعبك ❤️';
 }
 function remRows(){
   const ws=asgCur();if(!ws)return [];const st=asgStat(ws);
@@ -1595,10 +1648,11 @@ function remRows(){
 function remOpen(){
   const rows=remRows();
   if(!rows.length){toast('كل الخدام أتمّوا الافتقاد ✓');return}
+  const ws=asgCur();
   openM(`<div class="row sp"><h2 style="margin:0">📲 تذكير الخدام</h2><button class="btn sm" data-act="closeM">✕</button></div>
-  <p class="muted">الخدام الذين لم يُنهوا افتقاد أسمائهم هذا الأسبوع. الرسالة فيها الأسماء فقط (بدون تليفونات).</p>
-  ${rows.map(r=>{const m=remMsg(r.u,r.P,r.L.length),n=r.u.ph?waNum(r.u.ph):'';
-    return `<div class="asr"><div style="flex:1"><b>${esc(r.u.name)}</b> <span class="badge r">باقي ${r.P.length} من ${r.L.length}</span></div>${n?`<a class="btn sm wa" target="_blank" rel="noopener" href="https://wa.me/${n}?text=${encodeURIComponent(m)}">📲 واتساب</a>`:'<span class="muted" style="font-size:12px">لا يوجد رقم (أضفه من المستخدمين)</span>'}<button class="btn sm" data-act="asgCopyRem" data-id="${r.u.id}">📋 نسخ الرسالة</button></div>`}).join('')}`);
+  <p class="muted">الخدام الذين لم يُنهوا افتقاد أسمائهم هذا الأسبوع (الغياب أولًا). الرسالة فيها الأسماء فقط (بدون تليفونات).</p>
+  ${rows.map(r=>{const m=remMsg(r.u,r.P,r.L.length),n=r.u.ph?waNum(r.u.ph):'',na=r.P.filter(s=>fuKind(s.id,ws)==='A').length;
+    return `<div class="asr"><div style="flex:1"><b>${esc(r.u.name)}</b> <span class="badge r">باقي ${r.P.length} من ${r.L.length}</span>${na?` <span class="badge r">🔴 ${na} غياب</span>`:''}</div>${n?`<a class="btn sm wa" target="_blank" rel="noopener" href="https://wa.me/${n}?text=${encodeURIComponent(m)}">📲 واتساب</a>`:'<span class="muted" style="font-size:12px">لا يوجد رقم (أضفه من المستخدمين)</span>'}<button class="btn sm" data-act="asgCopyRem" data-id="${r.u.id}">📋 نسخ الرسالة</button></div>`}).join('')}`);
 }
 document.addEventListener('click',e=>{
   const t=e.target.closest('[data-act]');if(!t)return;
@@ -1656,7 +1710,7 @@ document.addEventListener('click',e=>{
 });
 
 /* ---------- إصدار النظام والتحديث بضغطة ---------- */
-const APP_VER='2.1.0',APP_DATE='2026-11-27';
+const APP_VER='2.2.0',APP_DATE='2026-11-27';
 let UPD=null,_uc=0;
 async function updCheck(manual){
   if(!/^https?:$/.test(location.protocol)){if(manual)toast('الفحص يعمل من رابط الموقع فقط');return false}
@@ -1725,14 +1779,14 @@ async function devRefresh(force,min){
   devDraw();if(sStat&&sStat.s==='ok')setStat('ok');
 }
 function devDraw(){
-  const b=$('#devBox');if(!b)return;
+  netDraw();const b=$('#devBox');if(!b)return;
   const now=Date.now(),ago=t=>{const m=Math.floor((now-t)/60000);return m<1?'قبل لحظات':m<60?'منذ '+m+' دقيقة':m<1440?'منذ '+Math.floor(m/60)+' ساعة':'منذ '+Math.floor(m/1440)+' يوم'};
   b.innerHTML=DEVS.length?`<div class="tw"><table><tr><th>الجهاز</th><th>المستخدم</th><th>الحالة</th><th>الإصدار</th></tr>${DEVS.map(d=>{
     const on=now-d.t<75000,me=!!(SYNC&&d.id===SYNC.dev);
     return `<tr><td>${esc(d.n)}${me?' <span class="badge g">هذا الجهاز</span> <button class="btn sm" data-act="devRename" title="تسمية الجهاز">✏</button>':''}</td><td>${esc(d.u||'—')}</td><td>${on?'🟢 متصل الآن':'⚪ آخر ظهور '+ago(d.t)}</td><td>${esc(d.v||'—')}</td></tr>`}).join('')}</table></div><p class="muted" style="font-size:12px;margin:6px 0 0">الجهاز يُعتبر «متصل الآن» لو أرسل إشارة خلال آخر دقيقة وربع وهو مفتوح. الجهاز الذي لم يُحدَّث للنسخة الجديدة لا يظهر هنا.</p>`:'<div class="muted">لا توجد بيانات بعد… (تظهر الأجهزة بعد أن تفتح النسخة الجديدة عليها)</div>';
 }
 setInterval(()=>devBeat(false),60000);
-setInterval(()=>{if($('#devBox'))devRefresh(false,10000)},30000);
+setInterval(()=>{if($('#devBox')||$('#netBar'))devRefresh(false,10000)},30000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden){devBeat(true);devRefresh(false,20000)}});
 document.addEventListener('click',async e=>{
   const t=e.target.closest('[data-act]');if(!t||t.dataset.act!=='devRename')return;
@@ -1740,6 +1794,71 @@ document.addEventListener('click',async e=>{
   const v=prompt('اسم هذا الجهاز (مثلًا: موبايل الخادم أ):',devName());if(v===null)return;
   const nm=v.trim().slice(0,40);if(nm)SYNC.dn=nm;else delete SYNC.dn;saveSync();
   await devBeat(true);devRefresh(true);
+});
+
+/* ---------- حالة الاتصال والأجهزة المتصلة على الشاشة الرئيسية (بالألوان) ---------- */
+var _lsync=0;
+function netInfo(){
+  const on=navigator.onLine!==false,s=sStat?sStat.s:'off';
+  if(!on)return {c:'bad',t:'🔴 لا يوجد اتصال بالإنترنت',d:'تعمل على البيانات المحفوظة في جهازك، وستتزامن تلقائيًا عند عودة الاتصال.'};
+  if(!SYNC||!SYNC.on)return {c:'',t:'🟢 متصل بالإنترنت',d:'المزامنة غير مفعّلة على هذا الجهاز (بياناتك محفوظة عليه فقط).'};
+  if(s==='err'||s==='offline')return {c:'bad',t:'🔴 تعذّرت المزامنة',d:(sStat&&sStat.m)||'تحقق من الاتصال أو إعدادات المزامنة.'};
+  if(s==='busy'||s==='idle')return {c:'warn',t:'🟠 جارٍ المزامنة…',d:'يتم تحديث البيانات بين الأجهزة.'};
+  const t=_lsync?new Date(_lsync):null;
+  return {c:'ok',t:'🟢 متصل ومتزامن ✓',d:t?'آخر مزامنة '+String(t.getHours()).padStart(2,'0')+':'+String(t.getMinutes()).padStart(2,'0'):'المزامنة تعمل.'};
+}
+function netHtml(){
+  const i=netInfo();let dv='';
+  if(SYNC&&SYNC.on&&navigator.onLine!==false){
+    const all=DEVS||[],on=all.filter(d=>Date.now()-d.t<75000);
+    dv=`<div style="margin-top:8px">📱 الأجهزة المتصلة الآن: <b>${on.length}</b>${all.length>on.length?` <span class="muted">(من ${all.length} جهاز مسجّل)</span>`:''}</div><div class="ndev">${on.map(d=>`<span>🟢 ${esc(d.n)}${d.u?' • '+esc(d.u):''}${SYNC&&d.id===SYNC.dev?' (هذا الجهاز)':''}</span>`).join('')||'<span class="muted">—</span>'}</div>`;
+  }
+  return `<div id="netBar" class="netc ${i.c}"><div class="nt">${i.t}</div><div class="muted" style="font-size:12.5px">${esc(i.d)}</div>${dv}</div>`;
+}
+function netDraw(){const e=$('#netBar');if(e)e.outerHTML=netHtml()}
+window.addEventListener('online',()=>{setStat(sStat?sStat.s:'off',sStat&&sStat.m);netDraw();if(SYNC&&SYNC.on)syncNow()});
+window.addEventListener('offline',()=>{setStat(sStat?sStat.s:'off',sStat&&sStat.m);netDraw()});
+
+/* ---------- حفظ الأسماء في جهات الاتصال (VCF) ---------- */
+const vcEsc=v=>String(v==null?'':v).replace(/\\/g,'\\\\').replace(/\r?\n/g,'\\n').replace(/,/g,'\\,').replace(/;/g,'\\;');
+function vcFold(l){let o='';while(l.length>72){o+=l.slice(0,72)+'\r\n ';l=l.slice(72)}return o+l}
+const vcTel=p=>{const n=waNum(p);return n?'+'+n:String(p||'').replace(/[^\d+]/g,'')};
+function vcCard(s,o){
+  const nm=(o.prefix?db.settings.cls+' - ':'')+s.name;
+  const L=['BEGIN:VCARD','VERSION:3.0','FN:'+vcEsc(nm),'N:;'+vcEsc(nm)+';;;','ORG:'+vcEsc(db.settings.cls)];
+  if(s.phone)L.push('TEL;TYPE=CELL:'+vcTel(s.phone));
+  if(s.parentPhone)L.push('TEL;TYPE=HOME:'+vcTel(s.parentPhone));
+  if(s.address)L.push('ADR;TYPE=HOME:;;'+vcEsc(s.address)+';;;;');
+  if(s.birth)L.push('BDAY:'+s.birth);
+  const nt=[s.grade,s.parentPhone?'ولي الأمر: '+s.parentPhone:'',s.notes].filter(Boolean).join(' | ');
+  if(nt)L.push('NOTE:'+vcEsc(nt));
+  if(o.photo&&s.photo&&/^data:image\/jpeg;base64,/.test(s.photo))L.push('PHOTO;ENCODING=b;TYPE=JPEG:'+s.photo.split(',')[1]);
+  L.push('END:VCARD');
+  return L.map(vcFold).join('\r\n');
+}
+function vcfList(){const q=state.q.trim();return fsorted().filter(s=>!q||(s.name+' '+(can('contact')?s.phone+' '+s.address:'')).includes(q))}
+function vcfOpen(){
+  const L=vcfList(),w=L.filter(s=>s.phone||s.parentPhone);
+  openM(`<div class="row sp"><h2 style="margin:0">📇 حفظ الأسماء في جهات الاتصال</h2><button class="btn sm" data-act="closeM">✕</button></div>
+  <p class="muted">سيُنشأ ملف <b>.vcf</b> تفتحه على الموبايل فتُضاف الأسماء كلها لجهات الاتصال: <b>${w.length}</b> اسم له رقم${L.length>w.length?` (و${L.length-w.length} بدون رقم سيتم تجاهلهم)`:''}. يشمل الاسم والتليفون ورقم ولي الأمر والعنوان وتاريخ الميلاد. (الشباب المعروضون الآن حسب المرحلة والبحث.)</p>
+  <label style="display:flex;gap:8px;align-items:center;color:var(--tx);margin:6px 0"><input type="checkbox" id="vcPre" checked> إضافة «${esc(db.settings.cls)} - » قبل كل اسم (لتمييزهم وسهولة البحث)</label>
+  <label style="display:flex;gap:8px;align-items:center;color:var(--tx);margin:6px 0"><input type="checkbox" id="vcPh" checked> إدراج صور الشباب</label>
+  <div class="row" style="margin-top:10px"><button class="btn pri" data-act="vcfGo">⬇ تنزيل الملف</button><button class="btn" data-act="closeM">إلغاء</button></div>
+  <p class="muted" style="font-size:12px;margin-top:10px"><b>أندرويد:</b> افتح الملف من التنزيلات واختر «جهات الاتصال».<br><b>آيفون:</b> أرسل الملف لنفسك (واتساب أو إيميل) ثم افتحه واختر «إضافة كل جهات الاتصال».</p>`);
+}
+function vcfGo(){
+  const w=vcfList().filter(s=>s.phone||s.parentPhone);
+  if(!w.length){toast('لا توجد أرقام للتصدير');return}
+  const o={prefix:$('#vcPre').checked,photo:$('#vcPh').checked};
+  dl('جهات_اتصال_'+db.settings.cls.replace(/\s+/g,'_')+'.vcf',w.map(s=>vcCard(s,o)).join('\r\n')+'\r\n','text/vcard;charset=utf-8');
+  logEv('تصدير جهات الاتصال (VCF): '+w.length);closeM();toast('تم تنزيل ملف جهات الاتصال ✓');
+}
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-act]');if(!t)return;const a=t.dataset.act;
+  if(a!=='vcfOpen'&&a!=='vcfGo')return;
+  if(secOn()&&!ME)return;
+  if(!can('contact')){toast('🔒 ليس لديك صلاحية لهذا الإجراء');return}
+  if(a==='vcfOpen')vcfOpen();else vcfGo();
 });
 
 applyBG();
