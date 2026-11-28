@@ -222,16 +222,19 @@ function recordFu(sid,x){
   return rec;
 }
 function mkTask(sid,d){return {id:'au_'+sid+'_'+d,sid,date:d,sess:d,auto:true,open:true,method:'',result:'',note:'',next:'',done:false}}
+const lastSess=()=>{const ds=sessions();return ds.length?ds[ds.length-1]:null};
+/* افتقاد الغياب يعتمد على آخر اجتماع فقط: أي مهمة غياب قديمة تُلغى (الغياب نفسه يبقى مسجّلًا في الحضور) */
+function pruneStale(){const l=lastSess();if(!l)return false;const n=db.fu.length;db.fu=db.fu.filter(f=>!(f.open&&f.sess&&f.sess!==l));return db.fu.length!==n}
 function autoSync(id,d,quiet){
-  const absent=(db.att[d]||{})[id]==='A';
+  pruneStale();const absent=(db.att[d]||{})[id]==='A'&&d===lastSess();
   const has=db.fu.find(f=>f.sid===id&&(f.sess===d||(!f.auto&&!f.open&&f.date>=d)));
   if(absent&&!has){db.fu.push(mkTask(id,d));const s=stu(id);if(!quiet&&s)toast('➕ '+s.name+' أضيف لقائمة الافتقاد')}
   else if(!absent&&has&&has.open){db.fu=db.fu.filter(f=>f!==has)}
 }
 function syncAuto(){
-  const ds=sessions();if(!ds.length)return;const d=ds[ds.length-1];let n=db.fu.length;
+  const ds=sessions();if(!ds.length)return;const d=ds[ds.length-1];let n=db.fu.length;const ch=pruneStale();
   db.students.forEach(s=>{if(db.att[d][s.id]==='A'&&!db.fu.some(f=>f.sid===s.id&&(f.sess===d||(!f.auto&&f.date>=d))))db.fu.push(mkTask(s.id,d))});
-  if(db.fu.length!==n)save();
+  if(db.fu.length!==n||ch)save();
 }
 const fuCount=id=>db.fu.filter(f=>f.sid===id&&!f.open).length;
 function saveLocal(){try{localStorage.setItem(KEY,JSON.stringify(db));bc&&bc.postMessage('upd')}catch(e){toast('تعذر الحفظ على هذا المتصفح')}}
@@ -790,9 +793,9 @@ document.addEventListener('click',e=>{
       save();closeM();render();toast(!id&&sessions().length?'تم الحفظ — الاجتماعات السابقة لن تُحتسب عليه، ويظهر «جديد» حتى يحضر '+NEWMIN+' اجتماعات':'تم الحفظ');break}
     case 'delStudent':{const s=stu(id);if(s&&confirm('حذف '+s.name+' وكل سجلاته؟')){logEv('حذف شاب: '+s.name);asgDrop(id);nodupDrop(id);db.students=db.students.filter(x=>x.id!==id);Object.values(db.att).forEach(d=>delete d[id]);Object.values(db.ev).forEach(d=>delete d[id]);db.fu=db.fu.filter(f=>f.sid!==id);save();render()}break}
     case 'profile':profile(id);break;
-    case 'setAtt':{const d=state.att;db.att[d]=db.att[d]||{};const v=t.dataset.v;if(db.att[d][id]===v)delete db.att[d][id];else db.att[d][id]=v;autoSync(id,d);save();render();break}
-    case 'allP':{const d=state.att;db.att[d]=db.att[d]||{};db.students.forEach(s=>{db.att[d][s.id]='P';autoSync(s.id,d,true)});save();render();break}
-    case 'clearAtt':if(confirm('مسح حضور '+fd(state.att)+'؟')){delete db.att[state.att];db.students.forEach(s=>autoSync(s.id,state.att,true));save();render()}break;
+    case 'setAtt':{const d=state.att;db.att[d]=db.att[d]||{};const v=t.dataset.v;if(db.att[d][id]===v)delete db.att[d][id];else db.att[d][id]=v;autoSync(id,d);syncAuto();save();render();break}
+    case 'allP':{const d=state.att;db.att[d]=db.att[d]||{};db.students.forEach(s=>{db.att[d][s.id]='P';autoSync(s.id,d,true)});syncAuto();save();render();break}
+    case 'clearAtt':if(confirm('مسح حضور '+fd(state.att)+'؟')){delete db.att[state.att];db.students.forEach(s=>autoSync(s.id,state.att,true));syncAuto();save();render()}break;
     case 'syncChip':if(SYNC&&SYNC.on)syncNow();else{state.tab='set';render();window.scrollTo(0,0)}break;
     case 'syncNow':syncNow().then(ok=>{if(ok)toast('تمت المزامنة ✓');else if(sStat.s==='err')toast('⚠ '+sStat.m)});break;
     case 'syncRules':copyT('{"rules":{".read":false,".write":false,"youth":{"$room":{".read":true,".write":true}}}}');break;
@@ -1535,6 +1538,7 @@ function asgForm(){
   <div><label>الأسماء الموزّعة</label><select id="agS"><option value="all">غياب + دوري (كل الشباب)</option><option value="need">افتقاد الغياب فقط (الغائبون)</option></select></div></div>
   <div class="f" style="margin-top:10px"><label>الخدام المشاركون هذا الأسبوع</label>${sv.map(u=>`<label style="display:flex;gap:8px;align-items:center;color:var(--tx);margin:4px 0"><input type="checkbox" class="agU" value="${u.id}" ${(u.role==='servant'||!anyS)?'checked':''}> ${esc(u.name)} <span class="muted">(${ROLES[u.role]})</span></label>`).join('')}</div>
   <label style="display:flex;gap:8px;align-items:center;color:var(--tx);margin:8px 0"><input type="checkbox" id="agR" checked> تدوير المجموعات عن الأسبوع السابق</label>
+  <div class="muted" style="font-size:12px;margin-bottom:4px">🔴 الغياب = من غاب في <b>آخر اجتماع فقط</b>؛ ومن حضر بعده يُلغى غيابه من الافتقاد (ويبقى الغياب مسجّلًا في الحضور).</div>
   <div class="muted" style="font-size:12px">🔴 أسماء الغياب تُوزَّع <b>أولًا وبالتساوي</b> على كل الخدام (لها الأولوية)، ثم 🔵 الافتقاد الدوري لباقي الشباب بحيث يتساوى إجمالي كل خادم.</div>
   <div id="agP" style="margin:8px 0;font-weight:700"></div>
   <div class="row"><button class="btn pri" data-act="asgGo">توزيع</button><button class="btn" data-act="closeM">إلغاء</button></div>`);
@@ -1712,7 +1716,7 @@ document.addEventListener('click',e=>{
 });
 
 /* ---------- إصدار النظام والتحديث بضغطة ---------- */
-const APP_VER='2.3.0',APP_DATE='2026-11-27';
+const APP_VER='2.4.0',APP_DATE='2026-11-27';
 let UPD=null,_uc=0;
 async function updCheck(manual){
   if(!/^https?:$/.test(location.protocol)){if(manual)toast('الفحص يعمل من رابط الموقع فقط');return false}
