@@ -327,7 +327,7 @@ function flat(d){
   (d.users||[]).forEach(u=>m['u:'+u.id]=JSON.stringify(u));
   Object.keys(d.nodup||{}).forEach(k=>m['n:'+k]='1');
   Object.keys(d.asg||{}).forEach(ws=>Object.keys(d.asg[ws]).forEach(id=>m['g:'+ws+':'+id]=d.asg[ws][id]));
-  ['msg','bmsg','bd','cls','lockMin'].forEach(k=>{if(d.settings[k]!=null)m['x:'+k]=JSON.stringify(d.settings[k])});
+  ['msg','bmsg','bd','cls','lockMin','remDay'].forEach(k=>{if(d.settings[k]!=null)m['x:'+k]=JSON.stringify(d.settings[k])});
   return m;
 }
 function unflat(m){
@@ -560,7 +560,7 @@ const NOD='<div class="empty">لا توجد بيانات بعد</div>';
 const EVC=[['h','حفظ الترانيم','#2f5597'],['l','الألحان','#8e44ad'],['r','الاستجابة داخل الفصل','#16a085']];
 function rankList(rows,fn){return rows.length?rows.map((r,i)=>`<div class="rk"><span class="n">${i+1}</span>${fn(r)}</div>`).join(''):NOD}
 
-function vHome(){return netHtml()+bkBanner()+myFuBanner()+vHome0()}
+function vHome(){return netHtml()+absCard()+bkBanner()+myFuBanner()+vHome0()}
 function vHome0(){
   const ds=sessions(),n=db.students.length;
   const need=sorted().filter(s=>stats(s.id).need&&myScope(s.id));
@@ -1018,7 +1018,7 @@ const ACT_PERM={
   allP:'att',clearAtt:'att',setAtt:'att',
   goFu:'fu',fuNew:'fu',fuSave:'fu',fuClose:'fu',fuDone:'fu',fuDel:'fuDel',
   gneed:'msg',gsel:'msg',gwho:'msg',gpreset:'msg',gwa:'msg',gnext:'msg',gsmsone:'msg',gsms:'msg',gsmslog:'msg',gsmsno:'msg',gcopym:'msg',gcopyn:'msg',greset:'msg',
-  csvSum:'rep',csvMat:'rep',cardOne:'rep',cardsAll:'rep',mRpt:'rep',asgForm:'cfg',vcfOpen:'contact',vcfGo:'contact',devRename:'cfg',asgRemind:'cfg',asgCopyRem:'cfg',asgGo:'cfg',asgFill:'cfg',asgF:'cfg',asgPrint:'cfg',asgDone:'fu',
+  csvSum:'rep',csvMat:'rep',cardOne:'rep',cardsAll:'rep',mRpt:'rep',asgForm:'cfg',vcfOpen:'contact',vcfGo:'contact',absOpen:'msg',absWa:'msg',absMark:'msg',icsDl:'cfg',devRename:'cfg',asgRemind:'cfg',asgCopyRem:'cfg',asgGo:'cfg',asgFill:'cfg',asgF:'cfg',asgPrint:'cfg',asgDone:'fu',
   mergeG:'stu',ignG:'stu',unIgn:'stu',unIgnAll:'stu',dupMergeForm:'stu',dateMgr:'cfg',dateMove:'cfg',dateDel:'cfg',bgClear:'cfg',bgDef:'cfg',saveSet:'cfg',exp:'cfg',csvStu:'cfg',sample:'cfg',wipe:'cfg',
   syncRules:'cfg',syncGen:'cfg',syncConnect:'cfg',syncPaste:'cfg',syncCode:'cfg',syncOff:'cfg'};
 const DIS_ACT=new Set(['setAtt']);
@@ -1128,8 +1128,8 @@ function applyRoleUI(){
 /* واجهة الإعدادات: الحماية والمستخدمون */
 const badgeRole=r=>`<span class="badge" style="background:var(--in);color:var(--pr2)">${ROLES[r]||esc(r)}</span>`;
 function vSet(){
-  if(!secOn())return secOffCard()+vSetAdmin()+verCard();
-  return accountCard()+(can('cfg')?usersCard()+vSetAdmin()+logCard():'')+verCard();
+  if(!secOn())return secOffCard()+vSetAdmin()+remSetCard()+verCard();
+  return accountCard()+(can('cfg')?usersCard()+vSetAdmin()+remSetCard()+logCard():'')+verCard();
 }
 function secOffCard(){
   return `<div class="card"><h2>🔐 الحماية والمستخدمون</h2>
@@ -1467,7 +1467,8 @@ function asgStat(ws){
   return {by,un,assigned,done,K};
 }
 
-function vFu(){
+function vFu(){return absBar()+vFuX()}
+function vFuX(){
   if(secOn()&&asgOn()&&!can('cfg'))return vFuMine();
   if(!secOn())return (asgOn()?'':`<div class="card"><b>👥 توزيع الافتقاد على الخدام</b><p class="muted" style="margin:6px 0 0">لتوزيع الأسماء على الخدام فعّل الحماية من الإعدادات وأنشئ حسابًا لكل خادم، فيرى كل خادم أسماءه فقط وتتابع أنت من لم يُفتقد.</p></div>`)+vFu0();
   return asgAdminCard()+vFuMine(true)+vFu0();
@@ -1716,7 +1717,7 @@ document.addEventListener('click',e=>{
 });
 
 /* ---------- إصدار النظام والتحديث بضغطة ---------- */
-const APP_VER='2.4.0',APP_DATE='2026-11-27';
+const APP_VER='2.5.0',APP_DATE='2026-11-27';
 let UPD=null,_uc=0;
 async function updCheck(manual){
   if(!/^https?:$/.test(location.protocol)){if(manual)toast('الفحص يعمل من رابط الموقع فقط');return false}
@@ -1866,6 +1867,66 @@ document.addEventListener('click',e=>{
   if(!can('contact')){toast('🔒 ليس لديك صلاحية لهذا الإجراء');return}
   if(a==='vcfOpen')vcfOpen();else vcfGo();
 });
+
+/* ---------- رسائل الغياب: تنبيه في يوم محدد (الخميس) للأسماء التي لم تُفتقد فقط ---------- */
+const DAYS_AR=['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+const absRemDay=()=>{const d=db.settings.remDay;return (d==null||d==='')?4:+d};
+const absTask=sid=>db.fu.filter(f=>f.open&&f.sid===sid).sort((a,b)=>String(b.sess).localeCompare(String(a.sess)))[0];
+const absList=()=>sorted().filter(s=>absTask(s.id)&&myScope(s.id));
+const absPhone=s=>s.phone||s.parentPhone||'';
+const absPending=()=>absList().filter(s=>!absTask(s.id).msgAt&&absPhone(s));
+function absCard(){
+  if(!can('msg')||new Date().getDay()!==absRemDay())return '';
+  const q=absPending();if(!q.length)return '';
+  const nop=absList().filter(s=>!absTask(s.id).msgAt&&!absPhone(s)).length;
+  return `<div class="card ka" style="border-color:#e0a800"><b>📲 موعد رسائل الغياب (${DAYS_AR[absRemDay()]})</b><p class="muted" style="margin:6px 0"><b>${q.length}</b> غائب في آخر اجتماع لم يُفتقدوا بعد ولم تُرسل لهم رسالة${nop?` • ${nop} بدون رقم`:''}.</p><button class="btn pri sm" data-act="absOpen">ابدأ الإرسال</button></div>`;
+}
+function absBar(){
+  if(!can('msg'))return '';
+  const L=absList();if(!L.length)return '';
+  const q=absPending().length;
+  return `<div class="card" style="margin-bottom:12px"><div class="row sp"><span>📲 <b>رسائل الغياب</b>: ${q?`<b>${q}</b> لم تُرسل بعد`:'كلها أُرسلت ✓'}</span><button class="btn sm pri" data-act="absOpen">فتح القائمة</button></div></div>`;
+}
+function absOpen(){
+  const L=absList();
+  if(!L.length){toast('لا يوجد غائبون بدون افتقاد ✓');return}
+  const sent=L.filter(s=>absTask(s.id).msgAt),pend=L.filter(s=>!absTask(s.id).msgAt);
+  const row=s=>{const t=absTask(s.id),ph=absPhone(s);
+    return `<div class="asr"><div style="flex:1;min-width:140px"><b>${esc(s.name)}</b> ${t.msgAt?`<span class="badge g">📨 أُرسلت ${fd(t.msgAt)}</span>`:''}<div class="muted" style="font-size:12px">${ph?esc(ph):'بدون رقم'}${t.sess?' • غاب '+fd(t.sess):''}</div></div>${ph?`<button class="btn sm wa" data-act="absWa" data-id="${s.id}">📲 واتساب</button>`:''}${!t.msgAt?`<button class="btn sm" data-act="absMark" data-id="${s.id}" title="تم إرسالها بطريقة أخرى">✓ تم</button>`:''}</div>`};
+  openM(`<div class="row sp"><h2 style="margin:0">📲 رسائل الغياب</h2><button class="btn sm" data-act="closeM">✕</button></div>
+  <p class="muted">الغائبون في <b>آخر اجتماع</b> الذين <b>لم يُفتقدوا بعد</b>. زر واتساب يفتح الرسالة جاهزة ويُعلَّم الاسم «أُرسلت» تلقائيًا. من تم افتقاده لا يظهر هنا.</p>
+  <div class="row sp"><span>أُرسلت: <b>${sent.length}</b></span><span>متبقّي: <b>${pend.length}</b></span></div>
+  ${pend.map(row).join('')}${sent.length?`<details style="margin-top:8px"><summary><b>تم إرسال رسالة لهم (${sent.length})</b></summary>${sent.map(row).join('')}</details>`:''}`);
+}
+function absMarkSent(id){const t=absTask(id);if(!t)return false;t.msgAt=today();t.msgBy=ME?ME.name:'';save();return true}
+const ICS_BY=['SU','MO','TU','WE','TH','FR','SA'];
+function icsDl(){
+  const d=absRemDay(),n=new Date(),k=(d-n.getDay()+7)%7,st=new Date(n.getFullYear(),n.getMonth(),n.getDate()+k),p=x=>String(x).padStart(2,'0');
+  const ds=st.getFullYear()+p(st.getMonth()+1)+p(st.getDate());
+  const L=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Youth//AR//','BEGIN:VEVENT','UID:youth-abs-'+d+'@local','DTSTAMP:'+ds+'T000000','DTSTART:'+ds+'T180000','DTEND:'+ds+'T181500','RRULE:FREQ=WEEKLY;BYDAY='+ICS_BY[d],'SUMMARY:'+vcEsc('رسائل الغياب — '+db.settings.cls),'DESCRIPTION:'+vcEsc('افتح نظام المتابعة وأرسل رسائل الغياب للأسماء التي لم تُفتقد بعد'),'BEGIN:VALARM','ACTION:DISPLAY','DESCRIPTION:رسائل الغياب','TRIGGER:PT0M','END:VALARM','END:VEVENT','END:VCALENDAR'];
+  dl('تذكير_رسائل_الغياب.ics',L.join('\r\n')+'\r\n','text/calendar;charset=utf-8');
+}
+function remSetCard(){
+  return `<div class="card"><h2 style="margin-top:0">📲 تنبيه رسائل الغياب</h2><p class="muted" style="margin:0 0 8px">في اليوم المحدد يظهر كارت في الرئيسية لكل من له صلاحية الرسائل، بأسماء الغائبين في آخر اجتماع الذين لم يُفتقدوا ولم تُرسل لهم رسالة. (والقائمة متاحة دائمًا من تبويب الافتقاد.)</p><div class="f"><label>يوم التنبيه (قبل الاجتماع)</label><select id="remDayS">${DAYS_AR.map((n,i)=>`<option value="${i}" ${i===absRemDay()?'selected':''}>${n}</option>`).join('')}</select></div><button class="btn" data-act="icsDl">📅 أضف تذكيرًا أسبوعيًا لتقويم الموبايل</button></div>`;
+}
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-act]');if(!t)return;
+  const a=t.dataset.act,id=t.dataset.id;
+  if(!['absOpen','absWa','absMark','icsDl'].includes(a))return;
+  if(secOn()&&!ME)return;
+  if(ACT_PERM[a]&&!can(ACT_PERM[a])){toast('🔒 ليس لديك صلاحية لهذا الإجراء');return}
+  if(a==='absOpen')absOpen();
+  else if(a==='icsDl')icsDl();
+  else{
+    const s=stu(id);if(!s||!absTask(id)||!myScope(id))return;
+    if(a==='absWa'){
+      const ph=absPhone(s);if(!ph)return;
+      window.open('https://wa.me/'+waNum(ph)+'?text='+encodeURIComponent(msgFor(s)),'_blank');
+    }
+    absMarkSent(id);render();absOpen();
+  }
+});
+document.addEventListener('change',e=>{if(e.target.id==='remDayS'&&can('cfg')){db.settings.remDay=+e.target.value;save();toast('تم الحفظ ✓')}});
 
 applyBG();
 authInit();syncAuto();applyTheme();render();syncInit();
