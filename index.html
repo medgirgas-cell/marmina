@@ -257,6 +257,7 @@ function contact(s){
 const stu=id=>db.students.find(s=>s.id===id);
 const sorted=()=>db.students.slice().sort((a,b)=>a.name.localeCompare(b.name,'ar'));
 const sessions=()=>Object.keys(db.att).filter(d=>Object.keys(db.att[d]).length).sort();
+const NEWMIN=3;
 function stats(id){
   const ds=sessions();let p=0,a=0,e=0,consec=0,last=null,lastD=null;
   ds.forEach(d=>{const v=db.att[d][id];if(v==='P')p++;else if(v==='A')a++;else if(v==='E')e++;if(v){last=v;lastD=d}});
@@ -264,7 +265,7 @@ function stats(id){
   const tot=p+a+e;
   const need=db.fu.some(f=>f.sid===id&&f.open);
   const followed=last==='A'&&!!lastD&&db.fu.some(f=>f.sid===id&&!f.open&&f.date>=lastD);
-  return {p,a,e,tot,pct:tot?Math.round(p/tot*100):null,consec,last,need,followed};
+  return {p,a,e,tot,pct:tot?Math.round(p/tot*100):null,isNew:tot>0&&tot<NEWMIN,consec,last,need,followed};
 }
 function evAvg(id){
   const s={h:0,l:0,r:0},c={h:0,l:0,r:0};
@@ -567,7 +568,7 @@ function vHome0(){
   const ld=ds[ds.length-1],lc={P:0,A:0,E:0};if(ld)Object.values(db.att[ld]).forEach(v=>lc[v]!=null&&lc[v]++);
   const lt=lc.P+lc.A+lc.E,ea=evAll();
   const rows=sorted().map(s=>({s,t:stats(s.id),e:evAvg(s.id)}));
-  const topA=rows.filter(r=>r.t.pct!=null).sort((a,b)=>b.t.pct-a.t.pct||b.t.p-a.t.p).slice(0,5);
+  const topA=rows.filter(r=>r.t.pct!=null&&!r.t.isNew).sort((a,b)=>b.t.pct-a.t.pct||b.t.p-a.t.p).slice(0,5);
   const topE=rows.filter(r=>r.e.t!=null).sort((a,b)=>b.e.t-a.e.t).slice(0,5);
   const st=(ic,v,l,ac)=>`<div class="stat" style="--ac:${ac}"><div class="ic">${ic}</div><b>${v}</b><span>${l}</span></div>`;
   return `<div class="grid">
@@ -592,17 +593,17 @@ function vHome0(){
 
 function repCharts(){
   const rows=sorted().map(s=>({s,t:stats(s.id),e:evAvg(s.id)}));
-  const att=rows.filter(r=>r.t.pct!=null).sort((a,b)=>b.t.pct-a.t.pct);
+  const att=rows.filter(r=>r.t.pct!=null).sort((a,b)=>(a.t.isNew-b.t.isNew)||b.t.pct-a.t.pct);
   const gc={'ممتاز':0,'جيد جدًا':0,'جيد':0,'يحتاج متابعة':0},cl={'ممتاز':'#1e8e4e','جيد جدًا':'#2f5597','جيد':'#f2a900','يحتاج متابعة':'#e04848'};
   rows.forEach(r=>{if(r.e.t!=null)gc[grade(r.e.t)]++});
   const tot=Object.values(gc).reduce((a,b)=>a+b,0),ea=evAll();
   return gradeCharts(rows)+`<div class="g2" style="margin-bottom:14px">
-  <div class="card"><h2>📊 نسبة حضور كل شاب</h2>${att.length?att.map(r=>hbar(esc(r.s.name),r.t.pct,100,pc(r.t.pct),r.t.pct+'%')).join(''):NOD}</div>
+  <div class="card"><h2>📊 نسبة حضور كل شاب</h2>${att.length?att.map(r=>hbar(esc(r.s.name),r.t.pct,100,r.t.isNew?'#8a94a6':pc(r.t.pct),r.t.isNew?'جديد • '+r.t.p+' من '+r.t.tot:r.t.pct+'%')).join(''):NOD}</div>
   <div><div class="card" style="margin-bottom:14px"><h2>🏅 توزيع التقديرات</h2>${tot?`<div class="chart">${donut(Object.keys(gc).map(k=>({v:gc[k],c:cl[k]})),tot,'شاب مُقيَّم')}${legend(Object.keys(gc).map(k=>({c:cl[k],l:k,v:gc[k]})))}</div>`:NOD}</div>
   <div class="card" style="margin-bottom:0"><h2>🎵 متوسط الأداء العام <span class="muted">(من 5)</span></h2>${EVC.some(x=>ea[x[0]]!=null)?EVC.map(([k,l,c])=>hbar(l,ea[k]||0,5,c,f1(ea[k]))).join(''):NOD}</div></div></div>`;
 }
 function profCharts(t,e){
-  return `<div class="chart" style="margin:12px 0;justify-content:space-around"><div>${donut([{v:t.p,c:COL.P},{v:t.a,c:COL.A},{v:t.e,c:COL.E}],t.pct==null?'—':t.pct+'%','حضور '+t.p+' من '+t.tot,135)}</div><div style="flex:1;min-width:210px">${EVC.map(([k,l,c])=>hbar(l,e[k]||0,5,c,f1(e[k])+'/5')).join('')}</div></div>`;
+  return `<div class="chart" style="margin:12px 0;justify-content:space-around"><div>${donut([{v:t.p,c:COL.P},{v:t.a,c:COL.A},{v:t.e,c:COL.E}],t.pct==null?'—':t.isNew?'جديد':t.pct+'%','حضور '+t.p+' من '+t.tot,135)}</div><div style="flex:1;min-width:210px">${EVC.map(([k,l,c])=>hbar(l,e[k]||0,5,c,f1(e[k])+'/5')).join('')}</div></div>`;
 }
 
 function vStudents(){
@@ -659,7 +660,7 @@ function vRep(){
   const ds=sessions(),list=sorted();
   return monthCard()+repCharts()+`<div class="card"><div class="row sp"><h2 style="margin:0">ملخص الشباب</h2><div class="row noprint"><button class="btn" data-act="csvSum">⬇ ملخص CSV</button><button class="btn" data-act="csvMat">⬇ جدول الحضور CSV</button><button class="btn" data-act="print">🖨 طباعة</button></div></div>
   <div class="tw" style="margin-top:10px"><table><tr><th>الاسم</th><th>المرحلة</th><th>حضور</th><th>غياب</th><th>النسبة</th><th>ترانيم</th><th>ألحان</th><th>استجابة</th><th>المتوسط /15</th><th>افتقادات</th><th>الحالة</th></tr>
-  ${list.map(s=>{const t=stats(s.id),e=evAvg(s.id),fc=fuCount(s.id);return `<tr><td><a href="#" data-act="profile" data-id="${s.id}">${esc(s.name)}</a></td><td>${esc(s.grade||'')}</td><td>${t.p}</td><td>${t.a+t.e}</td><td>${t.pct==null?'—':t.pct+'%'}</td><td>${f1(e.h)}</td><td>${f1(e.l)}</td><td>${f1(e.r)}</td><td>${e.t==null?'—':`<span class="badge ${gcls(e.t)}">${f1(e.t)}</span>`}</td><td>${fc}</td><td>${t.need?'<span class="badge r">يحتاج افتقاد</span>':t.followed?'<span class="badge g">تم افتقاده</span>':''}</td></tr>`}).join('')}</table></div></div>
+  ${list.map(s=>{const t=stats(s.id),e=evAvg(s.id),fc=fuCount(s.id);return `<tr><td><a href="#" data-act="profile" data-id="${s.id}">${esc(s.name)}</a></td><td>${esc(s.grade||'')}</td><td>${t.p}</td><td>${t.a+t.e}</td><td>${t.pct==null?'—':t.isNew?'جديد ('+t.p+'/'+t.tot+')':t.pct+'%'}</td><td>${f1(e.h)}</td><td>${f1(e.l)}</td><td>${f1(e.r)}</td><td>${e.t==null?'—':`<span class="badge ${gcls(e.t)}">${f1(e.t)}</span>`}</td><td>${fc}</td><td>${t.need?'<span class="badge r">يحتاج افتقاد</span>':t.followed?'<span class="badge g">تم افتقاده</span>':''}</td></tr>`}).join('')}</table></div></div>
   <div class="card"><h2>جدول الحضور</h2>${ds.length?`<div class="tw"><table><tr><th class="stk">الاسم</th>${ds.map(d=>`<th>${fd(d).slice(0,5)}</th>`).join('')}</tr>${list.map(s=>`<tr><td class="stk">${esc(s.name)}</td>${ds.map(d=>{const v=db.att[d][s.id];return `<td><span class="cell ${v||'N'}">${v==='P'?'ح':v==='A'?'غ':v==='E'?'ع':'·'}</span></td>`}).join('')}</tr>`).join('')}</table></div>`:'<div class="empty">لا توجد اجتماعات مسجلة</div>'}</div>`;
 }
 
@@ -734,6 +735,7 @@ function closeM(){$('#modal').classList.remove('on')}
 function studentForm(s){
   s=s||{};FPH=s.photo||'';
   openM(`<h2>${s.id?'تعديل بيانات':'إضافة شاب'}</h2>
+  ${!s.id&&sessions().length?`<div class="muted" style="background:var(--in);border-radius:10px;padding:8px 10px;margin-bottom:10px;font-size:13px">ℹ️ شاب جديد: الاجتماعات السابقة (${sessions().length}) <b>لن تُحتسب عليه</b>، وتبدأ نسبته من أول اجتماع يُسجَّل له. يظهر «جديد» بدل النسبة حتى يحضر ${NEWMIN} اجتماعات.</div>`:''}
   <div class="row" style="margin-bottom:12px"><span id="fPrev">${av({name:s.name,photo:FPH},72)}</span><label class="btn sm" style="margin:0;color:var(--tx)">📷 كاميرا<input type="file" data-ph="f" accept="image/*" capture="user" hidden></label><label class="btn sm" style="margin:0;color:var(--tx)">🖼 من الجهاز / المعرض<input type="file" data-ph="f" accept="image/*" hidden></label><button class="btn sm dng" type="button" data-act="phDel">إزالة الصورة</button></div><div class="fg">
   <div><label>الاسم *</label><input id="fN" value="${esc(s.name)}"></div>
   <div><label>التليفون</label><input id="fP" inputmode="tel" value="${esc(s.phone)}" placeholder="01012345678"></div>
@@ -785,7 +787,7 @@ document.addEventListener('click',e=>{
       const dups=t.dataset.force?findDups(name,$('#fP').value,id):[];let sid2=id;
       if(id){Object.assign(stu(id),o)}else{sid2=uid();db.students.push(Object.assign({id:sid2},o))}
       dups.forEach(x=>setNoDup(sid2,x.s.id));
-      save();closeM();render();toast('تم الحفظ');break}
+      save();closeM();render();toast(!id&&sessions().length?'تم الحفظ — الاجتماعات السابقة لن تُحتسب عليه، ويظهر «جديد» حتى يحضر '+NEWMIN+' اجتماعات':'تم الحفظ');break}
     case 'delStudent':{const s=stu(id);if(s&&confirm('حذف '+s.name+' وكل سجلاته؟')){logEv('حذف شاب: '+s.name);asgDrop(id);nodupDrop(id);db.students=db.students.filter(x=>x.id!==id);Object.values(db.att).forEach(d=>delete d[id]);Object.values(db.ev).forEach(d=>delete d[id]);db.fu=db.fu.filter(f=>f.sid!==id);save();render()}break}
     case 'profile':profile(id);break;
     case 'setAtt':{const d=state.att;db.att[d]=db.att[d]||{};const v=t.dataset.v;if(db.att[d][id]===v)delete db.att[d][id];else db.att[d][id]=v;autoSync(id,d);save();render();break}
@@ -843,7 +845,7 @@ document.addEventListener('click',e=>{
     case 'saveSet':db.settings.cls=$('#sCls').value.trim()||'شباب ثانوي';db.settings.msg=$('#sMsg').value.trim()||DEF_MSG;db.settings.bmsg=$('#sBm').value.trim()||DEF_BMSG;db.settings.bd=Math.max(1,Math.min(60,+$('#sBd').value||14));save();applyTheme();toast('تم الحفظ');break;
     case 'exp':expBackup();break;
     case 'csvStu':dl('الشباب.csv',csv([['الاسم','المرحلة','التليفون','تليفون ولي الأمر','العنوان','تاريخ الميلاد','ملاحظات']].concat(sorted().map(s=>[s.name,s.grade||'',s.phone,s.parentPhone,s.address,s.birth,s.notes]))),'text/csv');break;
-    case 'csvSum':dl('ملخص_الشباب.csv',csv([['الاسم','المرحلة','حضور','غياب','نسبة الحضور %','ترانيم','ألحان','استجابة','متوسط /15','عدد الافتقادات']].concat(sorted().map(s=>{const t=stats(s.id),e=evAvg(s.id);return [s.name,s.grade||'',t.p,t.a+t.e,t.pct==null?'':t.pct,f1(e.h),f1(e.l),f1(e.r),f1(e.t),fuCount(s.id)]}))),'text/csv');break;
+    case 'csvSum':dl('ملخص_الشباب.csv',csv([['الاسم','المرحلة','حضور','غياب','نسبة الحضور %','ترانيم','ألحان','استجابة','متوسط /15','عدد الافتقادات']].concat(sorted().map(s=>{const t=stats(s.id),e=evAvg(s.id);return [s.name,s.grade||'',t.p,t.a+t.e,t.pct==null?'':(t.isNew?'جديد':t.pct),f1(e.h),f1(e.l),f1(e.r),f1(e.t),fuCount(s.id)]}))),'text/csv');break;
     case 'csvMat':{const ds=sessions();dl('جدول_الحضور.csv',csv([['الاسم'].concat(ds.map(fd))].concat(sorted().map(s=>[s.name].concat(ds.map(d=>({P:'حاضر',A:'غائب',E:'بعذر'}[db.att[d][s.id]]||'')))))),'text/csv');break}
     case 'print':window.print();break;
     case 'sample':{if(db.students.length&&!confirm('سيتم إضافة بيانات تجريبية للموجود. متابعة؟'))return;sample();break}
@@ -1366,7 +1368,7 @@ function monthRows(M){
   return sorted().map(s=>{let p=0,a=0,e=0;
     ds.forEach(d=>{const v=db.att[d][s.id];if(v==='P')p++;else if(v==='A')a++;else if(v==='E')e++});
     const tot=p+a+e;
-    return {s,p,a,e,tot,pct:tot?Math.round(p/tot*100):null,ev:monthEv(s.id,M),fu:db.fu.filter(f=>f.sid===s.id&&!f.open&&String(f.date||'').startsWith(M)).length};
+    return {s,p,a,e,tot,pct:tot?Math.round(p/tot*100):null,isNew:stats(s.id).isNew,ev:monthEv(s.id,M),fu:db.fu.filter(f=>f.sid===s.id&&!f.open&&String(f.date||'').startsWith(M)).length};
   });
 }
 const pcol=p=>p==null?'#666':p>=75?'#1e8e4e':p>=50?'#b7791f':'#c0392b';
@@ -1380,8 +1382,8 @@ function mrOpen(M){
   const avg=T?Math.round(P/T*100):null;
   const evs=rows.filter(r=>r.ev!=null),evm=evs.length?evs.reduce((a,r)=>a+r.ev,0)/evs.length:null;
   const fuN=rows.reduce((a,r)=>a+r.fu,0);
-  const top=rows.filter(r=>r.pct!=null).sort((a,b)=>b.pct-a.pct||b.p-a.p).slice(0,5);
-  const low=rows.filter(r=>r.tot&&(r.a>=2||r.pct<60)).sort((a,b)=>b.a-a.a||a.pct-b.pct).slice(0,8);
+  const top=rows.filter(r=>r.pct!=null&&!r.isNew).sort((a,b)=>b.pct-a.pct||b.p-a.p).slice(0,5);
+  const low=rows.filter(r=>r.tot&&!r.isNew&&(r.a>=2||r.pct<60)).sort((a,b)=>b.a-a.a||a.pct-b.pct).slice(0,8);
   const per=ds.map(d=>{const v=Object.values(db.att[d]),p=v.filter(x=>x==='P').length;return {d,p,n:v.length,pct:v.length?Math.round(p/v.length*100):0}});
   const li=(r,t)=>`<div class="mli">${mrPic(r.s,26)}<span class="mn">${esc(r.s.name)}</span><b style="color:${pcol(r.pct)}">${t}</b></div>`;
   const html=`<div class="mr">
@@ -1401,7 +1403,7 @@ function mrOpen(M){
   </div>
   <h3>تفاصيل الشباب</h3>
   <table class="mt"><thead><tr><th>م</th><th>الشاب</th><th>حضور</th><th>غياب</th><th>اعتذار</th><th>النسبة</th><th>التقييم</th><th>افتقاد</th></tr></thead><tbody>
-  ${rows.map((r,i)=>`<tr><td>${i+1}</td><td style="text-align:right">${mrPic(r.s,24)}${esc(r.s.name)}</td><td>${r.p}</td><td>${r.a}</td><td>${r.e}</td><td style="color:${pcol(r.pct)};font-weight:700">${r.pct==null?'—':r.pct+'%'}</td><td>${r.ev==null?'—':f1(r.ev)}</td><td>${r.fu||'—'}</td></tr>`).join('')}
+  ${rows.map((r,i)=>`<tr><td>${i+1}</td><td style="text-align:right">${mrPic(r.s,24)}${esc(r.s.name)}</td><td>${r.p}</td><td>${r.a}</td><td>${r.e}</td><td style="color:${r.isNew?'#666':pcol(r.pct)};font-weight:700">${r.pct==null?'—':r.isNew?'جديد':r.pct+'%'}</td><td>${r.ev==null?'—':f1(r.ev)}</td><td>${r.fu||'—'}</td></tr>`).join('')}
   </tbody></table>
   <div class="mrsig"><span>أمين الخدمة: ................................</span><span>التوقيع: ....................</span></div>
   </div>`;
@@ -1710,7 +1712,7 @@ document.addEventListener('click',e=>{
 });
 
 /* ---------- إصدار النظام والتحديث بضغطة ---------- */
-const APP_VER='2.2.0',APP_DATE='2026-11-27';
+const APP_VER='2.3.0',APP_DATE='2026-11-27';
 let UPD=null,_uc=0;
 async function updCheck(manual){
   if(!/^https?:$/.test(location.protocol)){if(manual)toast('الفحص يعمل من رابط الموقع فقط');return false}
